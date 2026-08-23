@@ -1,0 +1,7 @@
+{
+  "name": "Khowar Dataset",
+  "description": "Preserving Khowar. Powering AI. Building the Future. The open community linguistic platform for lexicon, speech, validation, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
