@@ -5,15 +5,20 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 initializeApp();
 const db = getFirestore();
 
+const DATASET_COLLECTIONS = new Set([
+  "lexicon", "sentences", "speech", "stories", "knowledge", "images"
+]);
+
 export const reviewSubmission = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   if (request.auth.token.validator !== true) throw new HttpsError("permission-denied", "Validator role is required.");
 
-  const collection = String(request.data?.collection ?? "").trim();
+  const collection = String(request.data?.collection ?? "").trim().toLowerCase();
   const recordId = String(request.data?.recordId ?? "").trim();
   const decision = String(request.data?.decision ?? "").trim().toUpperCase();
   const notes = String(request.data?.notes ?? "").trim();
-  if (!collection || !recordId || !["APPROVED", "REJECTED"].includes(decision)) {
+
+  if (!DATASET_COLLECTIONS.has(collection) || !recordId || !["APPROVED", "REJECTED"].includes(decision)) {
     throw new HttpsError("invalid-argument", "Invalid review request.");
   }
 
@@ -42,9 +47,10 @@ export const voteOnCommunityPost = onCall(async (request) => {
   const voteRef = postRef.collection("votes").doc(request.auth.uid);
 
   await db.runTransaction(async (tx) => {
-    const [post, vote] = await Promise.all([tx.get(postRef), tx.get(voteRef)]);
+    const post = await tx.get(postRef);
     if (!post.exists) throw new HttpsError("not-found", "Community post not found.");
 
+    const vote = await tx.get(voteRef);
     if (vote.exists) {
       tx.delete(voteRef);
       tx.update(postRef, { voteScore: FieldValue.increment(-1), updatedAt: FieldValue.serverTimestamp() });
