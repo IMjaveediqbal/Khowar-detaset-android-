@@ -1,81 +1,63 @@
 package com.example.data
 
+import java.text.Normalizer
+
+/** Utilities for safe, consistent Khowar search/indexing. */
 object KhowarNormalizer {
     /**
-     * Normalizes Khowar Perso-Arabic text:
-     * - Unifies Arabic/Perso-Arabic letters (Yeh, Kaf, Heh, Teh Marbuta, etc.)
-     * - Removes optional Arabic diacritics/tashkeel (Fatha, Damma, Kasra, Sukun, Shadda)
-     * - Removes zero-width characters
-     * - Collapses multiple spaces
+     * Normalizes Khowar text for indexing and search.
+     * Keep the original text in the dataset; this function is not a replacement for it.
      */
     fun normalizeKhowarText(input: String): String {
         if (input.isBlank()) return ""
-        var text = input.trim()
 
-        // Normalize Yeh variants
-        text = text.replace('\u064A', '\u06CC') // Arabic Yeh to Farsi/Urdu Yeh
-        text = text.replace('\u0649', '\u06CC') // Alef Maksura to Yeh
-        text = text.replace('\u06D2', '\u06CC') // Yeh Barree to standard Yeh for indexing
-        text = text.replace('\u0626', '\u06CC') // Yeh with Hamza
+        var text = Normalizer.normalize(input.trim(), Normalizer.Form.NFC)
+            .replace('\u2018', '\u0027')
+            .replace('\u2019', '\u0027')
+            .replace('\u201C', '\u0022')
+            .replace('\u201D', '\u0022')
 
-        // Normalize Kaf variants
-        text = text.replace('\u0643', '\u06A9') // Arabic Kaf to Keheh
+        // Common Arabic/Perso-Arabic variants used when typing Khowar.
+        text = text
+            .replace('\u064A', '\u06CC') // Arabic Yeh -> Farsi Yeh
+            .replace('\u0649', '\u06CC') // Alef Maksura -> Yeh
+            .replace('\u06D2', '\u06CC') // Yeh Barree -> Yeh
+            .replace('\u0643', '\u06A9') // Arabic Kaf -> Keheh
+            .replace('\u0629', '\u06C1') // Teh Marbuta -> Goal Heh
+            .replace('\u0647', '\u06C1') // Arabic Heh -> Goal Heh
+            .replace('\u06BE', '\u06C1') // Do-Chashmi Heh -> Goal Heh
+            .replace('\u0624', '\u0648') // Waw with Hamza -> Waw
 
-        // Normalize Heh variants
-        text = text.replace('\u0629', '\u06C1') // Teh Marbuta to Goal Heh
-        text = text.replace('\u0647', '\u06C1') // Arabic Heh to Goal Heh
-        text = text.replace('\u06BE', '\u06C1') // Do-Chashmi Heh normalized for indexing
+        // Arabic diacritics/tashkeel.
+        text = text.replace(Regex("[\\u064B-\\u0652\\u0670\\u06DF-\\u06E8\\u06EA-\\u06ED]"), "")
 
-        // Normalize Waw variants
-        text = text.replace('\u0624', '\u0648') // Waw with Hamza to Waw
+        // Zero-width and bidirectional control characters should not affect search.
+        text = text
+            .replace("\u200B", "")
+            .replace("\u200C", "")
+            .replace("\u200D", "")
+            .replace("\u200E", "")
+            .replace("\u200F", "")
+            .replace("\u202A", "")
+            .replace("\u202B", "")
+            .replace("\u202C", "")
+            .replace("\u202D", "")
+            .replace("\u202E", "")
+            .replace("\u2066", "")
+            .replace("\u2067", "")
+            .replace("\u2068", "")
+            .replace("\u2069", "")
 
-        // Remove Arabic diacritics / Tashkeel
-        val diacriticsRegex = Regex("[\u064B-\u0652\u0670\u06DF-\u06E8\u06EA-\u06ED]")
-        text = text.replace(diacriticsRegex, "")
-
-        // Remove Zero Width characters
-        text = text.replace("\u200C", "").replace("\u200D", "").replace("\u200E", "").replace("\u200F", "")
-
-        // Collapse whitespace
-        text = text.replace(Regex("\\s+"), " ")
-
-        return text.trim()
+        return text.replace(Regex("\\s+"), " ").trim()
     }
 
-    /**
-     * Normalizes Latin transliteration for fuzzy search matching
-     */
-    fun normalizeTransliteration(input: String): String {
-        return input.trim()
+    /** Normalizes Latin transliteration for consistent search. */
+    fun normalizeTransliteration(input: String): String =
+        Normalizer.normalize(input.trim(), Normalizer.Form.NFKC)
             .lowercase()
-            .replace(Regex("[^a-z0-9\\s]"), "")
+            .replace('\u2018', '\u0027')
+            .replace('\u2019', '\u0027')
+            .replace(Regex("[^a-z0-9'\\s-]"), "")
             .replace(Regex("\\s+"), " ")
-    }
-
-    /**
-     * Rule-based heuristic transliterator for common Khowar phonetic representations
-     */
-    fun generateTransliterationHint(khowarArabic: String): String {
-        val mapping = mapOf(
-            'ا' to "a", 'ب' to "b", 'پ' to "p", 'ت' to "t", 'ٹ' to "t'",
-            'ث' to "s", 'ج' to "j", 'چ' to "ch", 'څ' to "ts", 'ځ' to "dz",
-            'ح' to "h", 'خ' to "kh", 'د' to "d", 'ڈ' to "d'", 'ذ' to "z",
-            'ر' to "r", 'ڑ' to "r'", 'ز' to "z", 'ژ' to "zh", 'ڙ' to "z'",
-            'س' to "s", 'ش' to "sh", 'ݰ' to "sh'", 'ص' to "s", 'ض' to "z",
-            'ط' to "t", 'ظ' to "z", 'ع' to "a", 'غ' to "gh", 'ف' to "f",
-            'ق' to "q", 'ک' to "k", 'گ' to "g", 'ل' to "l", 'م' to "m",
-            'ن' to "n", 'ں' to "n", 'و' to "w", 'ہ' to "h", 'ھ' to "h",
-            'ی' to "y", 'ے' to "e"
-        )
-        val sb = StringBuilder()
-        for (char in khowarArabic) {
-            val mapped = mapping[char]
-            if (mapped != null) {
-                sb.append(mapped)
-            } else if (char.isWhitespace()) {
-                sb.append(" ")
-            }
-        }
-        return sb.toString().trim()
-    }
+            .trim()
 }
