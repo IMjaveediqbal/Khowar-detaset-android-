@@ -2,20 +2,69 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{collection}/{recordId} {
-      // Only validated records are publicly readable.
-      allow read: if resource.data.status == 'APPROVED';
+    function signedIn() {
+      return request.auth != null;
+    }
 
-      // A client can create only its own SUBMITTED record.
-      allow create: if request.auth != null
+    function own(data) {
+      return signedIn() && data.ownerUid == request.auth.uid;
+    }
+
+    // Public dataset records: readable only after validation.
+    match /{collection}/{recordId} {
+      allow read: if resource.data.status == 'APPROVED';
+      allow create: if signedIn()
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.status == 'SUBMITTED'
                     && request.resource.data.contributorId is string
                     && request.resource.data.contributorId.size() > 0;
-
-      // Clients cannot alter or delete submissions after upload.
-      // Promotion to APPROVED belongs to a trusted backend/admin workflow.
       allow update, delete: if false;
+    }
+
+    // Community is public to read, but requires a Firebase-authenticated profile to participate.
+    match /communityPosts/{postId} {
+      allow read: if true;
+      allow create: if signedIn()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.authorProfileId is string
+                    && request.resource.data.authorName is string
+                    && request.resource.data.title is string
+                    && request.resource.data.body is string
+                    && request.resource.data.category is string
+                    && request.resource.data.solved == false
+                    && request.resource.data.answerCount == 0
+                    && request.resource.data.voteScore == 0;
+      allow update: if own(resource.data)
+                    && request.resource.data.ownerUid == resource.data.ownerUid
+                    && request.resource.data.authorProfileId == resource.data.authorProfileId
+                    && request.resource.data.authorName == resource.data.authorName;
+      allow delete: if own(resource.data);
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if signedIn()
+                      && request.resource.data.ownerUid == request.auth.uid
+                      && request.resource.data.authorProfileId is string
+                      && request.resource.data.authorName is string
+                      && request.resource.data.body is string
+                      && request.resource.data.accepted == false;
+        allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      }
+
+      match /votes/{userId} {
+        allow read: if true;
+        allow create, delete: if signedIn() && userId == request.auth.uid;
+        allow update: if false;
+      }
+
+      match /reports/{reportId} {
+        allow read: if false;
+        allow create: if signedIn()
+                      && request.resource.data.ownerUid == request.auth.uid
+                      && request.resource.data.reporterProfileId is string
+                      && request.resource.data.reason is string;
+        allow update, delete: if false;
+      }
     }
   }
 }
