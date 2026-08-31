@@ -13,11 +13,7 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import java.io.File
 
-/**
- * Best-effort cloud sync for the community dataset.
- * Room remains the local source of truth; Firestore/Storage becomes the shared cloud copy.
- * Cloud failures do not prevent a local contribution from being saved.
- */
+/** Best-effort cloud mirror. Room remains the local source of truth. */
 class FirebaseSyncService(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
@@ -30,7 +26,7 @@ class FirebaseSyncService(
             return
         }
         auth.signInAnonymously()
-            .addOnSuccessListener { result -> action(result.user?.uid ?: return@addOnSuccessListener) }
+            .addOnSuccessListener { result -> result.user?.uid?.let(action) }
     }
 
     fun syncLexicon(entry: LexiconEntry) = withAuthenticatedUser {
@@ -43,28 +39,21 @@ class FirebaseSyncService(
 
     fun syncSpeech(entry: SpeechRecording) = withAuthenticatedUser { uid ->
         val source = entry.audioFilePath
-        if (source.isBlank()) {
-            firestore.collection("speech").document(entry.id).set(entry.toMap(null), SetOptions.merge())
-            return@withAuthenticatedUser
-        }
-
-        val uri = runCatching {
+        val uri = if (source.isBlank()) null else runCatching {
             if (source.startsWith("content://") || source.startsWith("file://")) Uri.parse(source)
             else Uri.fromFile(File(source))
         }.getOrNull()
 
         if (uri == null) {
             firestore.collection("speech").document(entry.id).set(entry.toMap(null), SetOptions.merge())
-            return@withAuthenticatedUser
+        } else {
+            val ref = storage.reference.child("speech/$uid/${entry.id}.audio")
+            ref.putFile(uri).continueWithTask { ref.downloadUrl }
+                .addOnSuccessListener { downloadUri ->
+                    firestore.collection("speech").document(entry.id)
+                        .set(entry.toMap(downloadUri.toString()), SetOptions.merge())
+                }
         }
-
-        val ref = storage.reference.child("speech/$uid/${entry.id}.audio")
-        ref.putFile(uri)
-            .continueWithTask { ref.downloadUrl }
-            .addOnSuccessListener { downloadUri ->
-                firestore.collection("speech").document(entry.id)
-                    .set(entry.toMap(downloadUri.toString()), SetOptions.merge())
-            }
     }
 
     fun syncStory(entry: StoryEntry) = withAuthenticatedUser {
@@ -77,35 +66,22 @@ class FirebaseSyncService(
 
     fun syncImage(entry: ImageEntry) = withAuthenticatedUser { uid ->
         val source = entry.localUri
-        if (source.isBlank()) {
-            firestore.collection("images").document(entry.id).set(entry.toMap(null), SetOptions.merge())
-            return@withAuthenticatedUser
-        }
-
-        val uri = runCatching {
+        val uri = if (source.isBlank()) null else runCatching {
             if (source.startsWith("content://") || source.startsWith("file://")) Uri.parse(source)
             else Uri.fromFile(File(source))
         }.getOrNull()
 
         if (uri == null) {
             firestore.collection("images").document(entry.id).set(entry.toMap(null), SetOptions.merge())
-            return@withAuthenticatedUser
+        } else {
+            val ref = storage.reference.child("images/$uid/${entry.id}")
+            ref.putFile(uri).continueWithTask { ref.downloadUrl }
+                .addOnSuccessListener { downloadUri ->
+                    firestore.collection("images").document(entry.id)
+                        .set(entry.toMap(downloadUri.toString()), SetOptions.merge())
+                }
         }
-
-        val ref = storage.reference.child("images/$uid/${entry.id}")
-        ref.putFile(uri)
-            .continueWithTask { ref.downloadUrl }
-            .addOnSuccessListener { downloadUri ->
-                firestore.collection("images").document(entry.id)
-                    .set(entry.toMap(downloadUri.toString()), SetOptions.merge())
-            }
     }
-
-    fun syncRecordStatus(recordType: String, recordId: String, status: String, updatedAt: Long) =
-        withAuthenticatedUser {
-            firestore.collection(recordType.lowercase()).document(recordId)
-                .set(mapOf("status" to status, "updatedAt" to updatedAt), SetOptions.merge())
-        }
 
     private fun LexiconEntry.toMap() = mapOf(
         "id" to id, "khowarWord" to khowarWord, "normalizedKhowarWord" to normalizedKhowarWord,
