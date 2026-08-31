@@ -2,15 +2,10 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
-    }
+    function signedIn() { return request.auth != null; }
+    function own(data) { return signedIn() && data.ownerUid == request.auth.uid; }
 
-    function own(data) {
-      return signedIn() && data.ownerUid == request.auth.uid;
-    }
-
-    // Public dataset records: readable only after validation.
+    // Public dataset records: readable only after trusted validation.
     match /{collection}/{recordId} {
       allow read: if resource.data.status == 'APPROVED';
       allow create: if signedIn()
@@ -21,7 +16,7 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Community is public to read, but requires a Firebase-authenticated profile to participate.
+    // Community: public reading, profile/authentication required for participation.
     match /communityPosts/{postId} {
       allow read: if true;
       allow create: if signedIn()
@@ -34,10 +29,12 @@ service cloud.firestore {
                     && request.resource.data.solved == false
                     && request.resource.data.answerCount == 0
                     && request.resource.data.voteScore == 0;
+      // Authors may resolve their own thread, but counters/content are backend-controlled.
       allow update: if own(resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.authorProfileId == resource.data.authorProfileId
-                    && request.resource.data.authorName == resource.data.authorName;
+                    && request.resource.data.authorName == resource.data.authorName
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solved', 'updatedAt']);
       allow delete: if own(resource.data);
 
       match /comments/{commentId} {
@@ -51,10 +48,10 @@ service cloud.firestore {
         allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       }
 
+      // Voting is performed only by the trusted Cloud Function.
       match /votes/{userId} {
         allow read: if true;
-        allow create, delete: if signedIn() && userId == request.auth.uid;
-        allow update: if false;
+        allow create, update, delete: if false;
       }
 
       match /reports/{reportId} {
