@@ -6,6 +6,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -14,7 +15,8 @@ import kotlinx.coroutines.tasks.await
 /** Real-time community service. Dataset records remain a separate trusted domain. */
 class CommunityService(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
-    private val db: FirebaseFirestore = FirebaseFirestore.getInstance()
+    private val db: FirebaseFirestore = FirebaseFirestore.getInstance(),
+    private val functions: FirebaseFunctions = FirebaseFunctions.getInstance()
 ) {
     private val posts = db.collection("communityPosts")
 
@@ -107,17 +109,8 @@ class CommunityService(
 
     suspend fun toggleVote(postId: String, profile: User): Result<Unit> = runCatching {
         ensureAuthenticated()
-        val uid = auth.currentUser!!.uid
-        val voteRef = posts.document(postId).collection("votes").document(uid)
-        val postRef = posts.document(postId)
-        db.runTransaction { tx ->
-            if (tx.get(voteRef).exists()) {
-                tx.delete(voteRef)
-                tx.update(postRef, "voteScore", FieldValue.increment(-1))
-            } else {
-                tx.set(voteRef, mapOf("profileId" to profile.id, "createdAt" to FieldValue.serverTimestamp()))
-                tx.update(postRef, "voteScore", FieldValue.increment(1))
-            }
-        }.await()
+        functions.getHttpsCallable("voteOnCommunityPost")
+            .call(mapOf("postId" to postId, "profileId" to profile.id))
+            .await()
     }
 }
