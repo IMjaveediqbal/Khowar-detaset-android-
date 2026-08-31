@@ -5,12 +5,15 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.community.CommunityScreen
+import com.example.community.CommunityUiState
 import com.example.ui.components.AppHeader
 import com.example.ui.components.AppNavigationBar
 import com.example.ui.screens.*
@@ -29,6 +32,7 @@ class MainActivity : ComponentActivity() {
             val currentScreen by viewModel.currentScreen.collectAsState()
             val currentLanguage by viewModel.currentLanguage.collectAsState()
             val statusMessage by viewModel.statusMessage.collectAsState()
+            val communityOpen by CommunityUiState.open.collectAsState()
 
             val lexiconQueue by viewModel.lexiconQueue.collectAsState()
             val sentenceQueue by viewModel.sentenceQueue.collectAsState()
@@ -49,38 +53,49 @@ class MainActivity : ComponentActivity() {
             }
 
             KhowarDatasetTheme(darkTheme = isDark) {
-                Scaffold(
-                    topBar = {
-                        AppHeader(viewModel = viewModel)
-                    },
-                    bottomBar = {
-                        AppNavigationBar(
-                            currentScreen = currentScreen,
-                            onNavigate = { viewModel.navigateTo(it) },
-                            lang = currentLanguage,
-                            reviewQueueCount = totalQueueCount
-                        )
-                    },
-                    snackbarHost = {
-                        SnackbarHost(hostState = snackbarHostState)
-                    },
-                    modifier = Modifier.fillMaxSize()
-                ) { innerPadding ->
-                    Crossfade(
-                        targetState = currentScreen,
-                        label = "ScreenTransition",
-                        modifier = Modifier.padding(innerPadding)
-                    ) { screen ->
-                        when (screen) {
-                            AppScreen.HOME -> HomeScreen(viewModel = viewModel)
-                            AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
-                            AppScreen.CONTRIBUTE -> ContributeScreen(viewModel = viewModel)
-                            AppScreen.VALIDATE -> ValidateScreen(viewModel = viewModel)
-                            AppScreen.STATS -> StatsScreen(viewModel = viewModel)
-                            AppScreen.RESEARCH -> ResearcherScreen(viewModel = viewModel)
-                            AppScreen.ADMIN -> AdminScreen(viewModel = viewModel)
-                            AppScreen.DOCS -> DocsScreen(viewModel = viewModel)
-                            AppScreen.PROFILE -> ProfileScreen(viewModel = viewModel)
+                Box(Modifier.fillMaxSize()) {
+                    Scaffold(
+                        topBar = { AppHeader(viewModel = viewModel) },
+                        bottomBar = {
+                            AppNavigationBar(
+                                currentScreen = currentScreen,
+                                onNavigate = { viewModel.navigateTo(it) },
+                                lang = currentLanguage,
+                                reviewQueueCount = totalQueueCount
+                            )
+                        },
+                        floatingActionButton = {
+                            ExtendedFloatingActionButton(
+                                onClick = { CommunityUiState.show() },
+                                icon = { Icon(Icons.Default.Groups, contentDescription = null) },
+                                text = { Text("Community") }
+                            )
+                        },
+                        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                        modifier = Modifier.fillMaxSize()
+                    ) { innerPadding ->
+                        Crossfade(
+                            targetState = currentScreen,
+                            label = "ScreenTransition",
+                            modifier = Modifier.padding(innerPadding)
+                        ) { screen ->
+                            when (screen) {
+                                AppScreen.HOME -> HomeScreen(viewModel = viewModel)
+                                AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
+                                AppScreen.CONTRIBUTE -> ContributeScreen(viewModel = viewModel)
+                                AppScreen.VALIDATE -> ValidateScreen(viewModel = viewModel)
+                                AppScreen.STATS -> StatsScreen(viewModel = viewModel)
+                                AppScreen.RESEARCH -> ResearcherScreen(viewModel = viewModel)
+                                AppScreen.ADMIN -> AdminScreen(viewModel = viewModel)
+                                AppScreen.DOCS -> DocsScreen(viewModel = viewModel)
+                                AppScreen.PROFILE -> ProfileScreen(viewModel = viewModel)
+                            }
+                        }
+                    }
+
+                    if (communityOpen) {
+                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                            CommunityScreen(viewModel = viewModel)
                         }
                     }
                 }
