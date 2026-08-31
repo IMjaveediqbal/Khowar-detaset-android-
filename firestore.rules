@@ -1,0 +1,21 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Public dataset access is limited to records that have passed local validation.
+    match /{collection}/{recordId} {
+      allow read: if resource.data.status == 'APPROVED';
+
+      // Mobile clients may only submit new records for human review.
+      // Approval must never be writable directly by an ordinary client.
+      allow create: if request.auth != null
+                    && request.resource.data.status == 'SUBMITTED'
+                    && request.resource.data.contributorId is string
+                    && request.resource.data.contributorId.size() > 0;
+
+      // Clients cannot edit or delete the cloud submission after it is created.
+      // A trusted backend/administrator can later promote validated records.
+      allow update, delete: if false;
+    }
+  }
+}
