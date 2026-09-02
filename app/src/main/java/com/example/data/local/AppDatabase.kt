@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabase.Callback
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.*
 import kotlinx.coroutines.CoroutineScope
@@ -29,11 +30,38 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun metadataDao(): MetadataDao
 
     companion object {
+        /**
+         * Version 1 -> 2 preserves existing local contributions while adding
+         * research-governance metadata introduced in schema version 2.
+         */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE lexicon_entries ADD COLUMN dataStage TEXT NOT NULL DEFAULT 'RAW'")
+                db.execSQL("ALTER TABLE lexicon_entries ADD COLUMN datasetVersion TEXT")
+
+                db.execSQL("ALTER TABLE sentences ADD COLUMN dataStage TEXT NOT NULL DEFAULT 'RAW'")
+                db.execSQL("ALTER TABLE sentences ADD COLUMN datasetVersion TEXT")
+
+                db.execSQL("ALTER TABLE speech_recordings ADD COLUMN dataStage TEXT NOT NULL DEFAULT 'RAW'")
+                db.execSQL("ALTER TABLE speech_recordings ADD COLUMN datasetVersion TEXT")
+
+                db.execSQL("ALTER TABLE dataset_versions ADD COLUMN speakerCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE dataset_versions ADD COLUMN dialectCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE dataset_versions ADD COLUMN validatedRecordCount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE dataset_versions ADD COLUMN researchReadyRecordCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         @Volatile private var INSTANCE: AppDatabase? = null
+
         fun getDatabase(context: Context, scope: CoroutineScope): AppDatabase = INSTANCE ?: synchronized(this) {
-            val instance = Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "khowar_dataset.db")
+            val instance = Room.databaseBuilder(
+                context.applicationContext,
+                AppDatabase::class.java,
+                "khowar_dataset.db"
+            )
+                .addMigrations(MIGRATION_1_2)
                 .addCallback(AppDatabaseCallback(scope))
-                .fallbackToDestructiveMigration()
                 .build()
             INSTANCE = instance
             instance
@@ -42,8 +70,11 @@ abstract class AppDatabase : RoomDatabase() {
         private class AppDatabaseCallback(private val scope: CoroutineScope) : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {
                 super.onCreate(db)
-                INSTANCE?.let { database -> scope.launch(Dispatchers.IO) { populateSystemConfiguration(database) } }
+                INSTANCE?.let { database ->
+                    scope.launch(Dispatchers.IO) { populateSystemConfiguration(database) }
+                }
             }
+
             suspend fun populateSystemConfiguration(database: AppDatabase) {
                 val metadataDao = database.metadataDao()
                 metadataDao.insertLicenses(listOf(
