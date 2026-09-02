@@ -215,12 +215,16 @@ interface ValidationDao {
     @Query("SELECT * FROM validation_reviews WHERE recordId = :recordId ORDER BY createdAt DESC")
     fun getReviewsForRecord(recordId: String): Flow<List<ValidationReview>>
 
+    /** Prevents a validator from accidentally creating multiple reviews for the same record. */
+    @Query("SELECT COUNT(*) > 0 FROM validation_reviews WHERE recordType = :recordType AND recordId = :recordId AND validatorId = :validatorId")
+    suspend fun hasReviewed(recordType: String, recordId: String, validatorId: String): Boolean
+
     /** Number of records that have at least two independent validators. */
-    @Query("SELECT COUNT(*) FROM (SELECT recordId FROM validation_reviews GROUP BY recordId HAVING COUNT(DISTINCT validatorId) >= 2)")
+    @Query("SELECT COUNT(*) FROM (SELECT recordType, recordId FROM validation_reviews GROUP BY recordType, recordId HAVING COUNT(DISTINCT validatorId) >= 2)")
     fun countMultiReviewedRecords(): Flow<Int>
 
     /** Number of multi-reviewed records where all validators selected the same decision. */
-    @Query("SELECT COUNT(*) FROM (SELECT recordId FROM validation_reviews GROUP BY recordId HAVING COUNT(DISTINCT validatorId) >= 2 AND COUNT(DISTINCT decision) = 1)")
+    @Query("SELECT COUNT(*) FROM (SELECT recordType, recordId FROM validation_reviews GROUP BY recordType, recordId HAVING COUNT(DISTINCT validatorId) >= 2 AND COUNT(DISTINCT decision) = 1)")
     fun countUnanimousMultiReviewedRecords(): Flow<Int>
 
     /** Total validation records, useful for reporting coverage alongside agreement. */
