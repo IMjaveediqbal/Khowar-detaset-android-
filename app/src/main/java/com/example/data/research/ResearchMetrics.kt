@@ -9,9 +9,15 @@ data class ValidationMetrics(
     val participatingValidators: Int = 0,
     val multiReviewedRecords: Int = 0,
     val unanimousMultiReviewedRecords: Int = 0,
-    val percentAgreement: Double = 0.0
+    val percentAgreement: Double = 0.0,
+    val averageReviewsPerMultiReviewedRecord: Double = 0.0
 )
 
+/**
+ * Research reporting metrics derived only from stored validation records.
+ * "Percent agreement" here means the share of records with >=2 distinct
+ * validators whose recorded decisions are unanimous; it is not Cohen's kappa.
+ */
 class ResearchMetricsRepository(database: AppDatabase) {
     private val validationDao = database.validationDao()
 
@@ -26,12 +32,18 @@ class ResearchMetricsRepository(database: AppDatabase) {
         } else {
             0.0
         }
+        val averageReviews = if (multiReviewed > 0) {
+            totalReviews.toDouble() / multiReviewed.toDouble()
+        } else {
+            0.0
+        }
         ValidationMetrics(
             totalReviews = totalReviews,
             participatingValidators = validators,
             multiReviewedRecords = multiReviewed,
             unanimousMultiReviewedRecords = unanimous,
-            percentAgreement = agreement
+            percentAgreement = agreement,
+            averageReviewsPerMultiReviewedRecord = averageReviews
         )
     }
 }
