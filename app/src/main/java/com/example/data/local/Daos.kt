@@ -215,6 +215,22 @@ interface ValidationDao {
     @Query("SELECT * FROM validation_reviews WHERE recordId = :recordId ORDER BY createdAt DESC")
     fun getReviewsForRecord(recordId: String): Flow<List<ValidationReview>>
 
+    /** Number of records that have at least two independent validators. */
+    @Query("SELECT COUNT(*) FROM (SELECT recordId FROM validation_reviews GROUP BY recordId HAVING COUNT(DISTINCT validatorId) >= 2)")
+    fun countMultiReviewedRecords(): Flow<Int>
+
+    /** Number of multi-reviewed records where all validators selected the same decision. */
+    @Query("SELECT COUNT(*) FROM (SELECT recordId FROM validation_reviews GROUP BY recordId HAVING COUNT(DISTINCT validatorId) >= 2 AND COUNT(DISTINCT decision) = 1)")
+    fun countUnanimousMultiReviewedRecords(): Flow<Int>
+
+    /** Total validation records, useful for reporting coverage alongside agreement. */
+    @Query("SELECT COUNT(*) FROM validation_reviews")
+    fun countAllReviews(): Flow<Int>
+
+    /** Number of distinct validators participating in validation. */
+    @Query("SELECT COUNT(DISTINCT validatorId) FROM validation_reviews")
+    fun countDistinctValidators(): Flow<Int>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReview(review: ValidationReview)
 }
