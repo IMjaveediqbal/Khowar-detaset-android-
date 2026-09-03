@@ -21,7 +21,9 @@ class CommunityService(
     private val posts = db.collection("communityPosts")
 
     suspend fun ensureAuthenticated() {
-        if (auth.currentUser == null) auth.signInAnonymously().await()
+        require(auth.currentUser != null) {
+            "Sign in with a verified account before using community actions."
+        }
     }
 
     fun observePosts(category: String? = null, limit: Long = 50): Flow<List<CommunityPost>> = callbackFlow {
