@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [User::class, Region::class, Dialect::class, License::class, LexiconEntry::class, SentenceEntry::class, SpeechRecording::class, StoryEntry::class, ImageEntry::class, KnowledgeEntry::class, ConsentRecord::class, ValidationReview::class, DatasetVersion::class, ApiKey::class, AuditLog::class, ModerationReport::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -30,25 +30,26 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun metadataDao(): MetadataDao
 
     companion object {
-        /**
-         * Version 1 -> 2 preserves existing local contributions while adding
-         * research-governance metadata introduced in schema version 2.
-         */
         private val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE lexicon_entries ADD COLUMN dataStage TEXT NOT NULL DEFAULT 'RAW'")
                 db.execSQL("ALTER TABLE lexicon_entries ADD COLUMN datasetVersion TEXT")
-
                 db.execSQL("ALTER TABLE sentences ADD COLUMN dataStage TEXT NOT NULL DEFAULT 'RAW'")
                 db.execSQL("ALTER TABLE sentences ADD COLUMN datasetVersion TEXT")
-
                 db.execSQL("ALTER TABLE speech_recordings ADD COLUMN dataStage TEXT NOT NULL DEFAULT 'RAW'")
                 db.execSQL("ALTER TABLE speech_recordings ADD COLUMN datasetVersion TEXT")
-
                 db.execSQL("ALTER TABLE dataset_versions ADD COLUMN speakerCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE dataset_versions ADD COLUMN dialectCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE dataset_versions ADD COLUMN validatedRecordCount INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE dataset_versions ADD COLUMN researchReadyRecordCount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** Binds legacy local profiles to Firebase identity without deleting any contribution rows. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE users ADD COLUMN firebaseUid TEXT")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_users_firebaseUid ON users(firebaseUid)")
             }
         }
 
@@ -60,7 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "khowar_dataset.db"
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .addCallback(AppDatabaseCallback(scope))
                 .build()
             INSTANCE = instance
