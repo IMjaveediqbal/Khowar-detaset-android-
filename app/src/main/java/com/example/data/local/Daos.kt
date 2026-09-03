@@ -235,6 +235,10 @@ interface ValidationDao {
     @Query("SELECT COUNT(DISTINCT validatorId) FROM validation_reviews")
     fun countDistinctValidators(): Flow<Int>
 
+    /** All reviews used by reproducible inter-annotator reliability calculations. */
+    @Query("SELECT * FROM validation_reviews ORDER BY recordType, recordId, createdAt ASC")
+    fun getAllReviews(): Flow<List<ValidationReview>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertReview(review: ValidationReview)
 }
