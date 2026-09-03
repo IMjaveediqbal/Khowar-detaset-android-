@@ -1,6 +1,7 @@
 package com.example.data.model
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
@@ -16,8 +17,8 @@ enum class StoryCategory { FOLK_TALE, PERSONAL_NARRATIVE, CULTURAL_DESCRIPTION, 
 
 enum class DataStage { RAW, QUALITY_CHECKED, COMMUNITY_VERIFIED, EXPERT_VERIFIED, RESEARCH_READY, RELEASED }
 
-@Entity(tableName = "users")
-data class User(@PrimaryKey val id: String = UUID.randomUUID().toString(), val email: String, val displayName: String, val username: String, val role: UserRole = UserRole.CONTRIBUTOR, val preferredLanguage: String = "en", val region: String = "Chitral", val bio: String = "", val isPublicProfile: Boolean = true, val createdAt: Long = System.currentTimeMillis())
+@Entity(tableName = "users", indices = [Index(value = ["firebaseUid"], unique = true)])
+data class User(@PrimaryKey val id: String = UUID.randomUUID().toString(), val email: String, val displayName: String, val username: String, val role: UserRole = UserRole.CONTRIBUTOR, val preferredLanguage: String = "en", val region: String = "Chitral", val bio: String = "", val isPublicProfile: Boolean = true, val createdAt: Long = System.currentTimeMillis(), val firebaseUid: String? = null)
 
 @Entity(tableName = "regions")
 data class Region(@PrimaryKey val id: String, val name: String, val nameKhowar: String, val province: String, val district: String)
