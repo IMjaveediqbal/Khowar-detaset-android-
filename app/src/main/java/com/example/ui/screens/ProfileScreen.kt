@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,7 +30,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     val currentUser by viewModel.currentUser.collectAsState()
     val user = currentUser
-    var showEditProfileDialog by remember { mutableStateOf(false) }
     var profileTab by remember { mutableStateOf("OVERVIEW") }
 
     val myWordsFlow = remember(viewModel) { viewModel.currentUser.flatMapLatest { u -> if (u == null) flowOf(emptyList()) else viewModel.repository.getUserContributionsLexicon(u.id) } }
@@ -63,7 +61,6 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                             Text(user?.username?.let { "@$it" } ?: "Sign in to contribute", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text("Contributor ID: ${user?.id?.take(8) ?: "—"}", fontSize = 10.sp, color = TealAccent)
                         }
-                        if (user != null) IconButton(onClick = { showEditProfileDialog = true }) { Icon(Icons.Default.ManageAccounts, "Edit Profile", tint = TealAccent) }
                     }
                     Spacer(Modifier.height(14.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -130,7 +127,6 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
             } }
         }
     }
-    if (showEditProfileDialog) EditProfileDialog(user, viewModel) { showEditProfileDialog = false }
 }
 
 @Composable private fun ProfileStat(value: String, label: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(value, fontSize = 16.sp, fontWeight = FontWeight.Black, color = TealAccent); Text(label, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
@@ -153,7 +149,6 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable fun EditProfileDialog(user: com.example.data.model.User?, viewModel: KhowarViewModel, onDismiss: () -> Unit) {
-    var email by remember { mutableStateOf(user?.email ?: "") }
     var name by remember { mutableStateOf(user?.displayName ?: "") }
     var username by remember { mutableStateOf(user?.username ?: "") }
     var region by remember { mutableStateOf(user?.region ?: "Chitral") }
@@ -161,10 +156,10 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
         Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(16.dp)) { Column(Modifier.padding(20.dp)) {
             Text("Edit Profile", fontSize = 16.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp))
             OutlinedTextField(name, { name = it }, label = { Text("Display Name") }, modifier = Modifier.fillMaxWidth()); Spacer(Modifier.height(8.dp))
-            OutlinedTextField(email, { email = it }, label = { Text("Email Address") }, modifier = Modifier.fillMaxWidth()); Spacer(Modifier.height(8.dp))
+            Text("Account email is managed by authentication and cannot be changed here.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant); Spacer(Modifier.height(8.dp))
             OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth()); Spacer(Modifier.height(8.dp))
             OutlinedTextField(region, { region = it }, label = { Text("Native Region / Valley") }, modifier = Modifier.fillMaxWidth()); Spacer(Modifier.height(16.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Cancel") }; Button(onClick = { viewModel.loginOrRegister(email, name, username, user?.role ?: UserRole.CONTRIBUTOR, region); onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = TealAccent, contentColor = Navy900)) { Text("Save") } }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onDismiss) { Text("Cancel") }; Button(onClick = { onDismiss() }, colors = ButtonDefaults.buttonColors(containerColor = TealAccent, contentColor = Navy900)) { Text("Save") } }
         } }
     }
 }
