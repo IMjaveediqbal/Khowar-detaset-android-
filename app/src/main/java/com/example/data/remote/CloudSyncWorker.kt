@@ -27,6 +27,7 @@ class CloudSyncWorker(
 
         val queue = database.syncOperationDao()
         queue.recoverStale(System.currentTimeMillis() - STALE_UPLOAD_MS, System.currentTimeMillis())
+        queue.purgeCompleted(System.currentTimeMillis() - COMPLETED_RETENTION_MS)
         var hadFailure = false
 
         repeat(MAX_BATCHES) {
@@ -34,28 +35,52 @@ class CloudSyncWorker(
             if (operations.isEmpty()) return if (hadFailure) Result.retry() else Result.success()
 
             for (operation in operations) {
+                val now = System.currentTimeMillis()
                 if (operation.ownerFirebaseUid != user.uid) {
-                    queue.markFailed(operation.id, "Authenticated Firebase UID does not own this queued operation.", System.currentTimeMillis() + SECURITY_RETRY_MS, System.currentTimeMillis())
-                    hadFailure = true
+                    queue.markRejected(operation.id, "Authenticated Firebase UID does not own this queued operation.", now)
                     continue
                 }
-                if (queue.markUploading(operation.id, System.currentTimeMillis()) == 0) continue
+                if (queue.markUploading(operation.id, now) == 0) continue
 
                 try {
-                    when (operation.operationType.uppercase()) {
-                        "CREATE", "UPDATE" -> syncRecord(operation.recordType, operation.recordId)
-                        else -> throw IllegalArgumentException("Unsupported sync operation: ${operation.operationType}")
+                    verifyLocalOwnership(operation.recordType, operation.recordId, user.uid)
+                    require(operation.operationType.uppercase() == "CREATE") {
+                        "Only immutable CREATE operations are supported by the cloud dataset rules."
                     }
+                    syncRecord(operation.recordType, operation.recordId)
                     queue.markCompleted(operation.id, System.currentTimeMillis())
                 } catch (error: Throwable) {
                     hadFailure = true
                     val attempt = operation.attempts + 1
                     val delay = min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * (1L shl min(attempt, 6)))
-                    queue.markFailed(operation.id, error.message ?: error::class.java.simpleName, System.currentTimeMillis() + delay, System.currentTimeMillis())
+                    queue.markFailed(
+                        operation.id,
+                        error.message ?: error::class.java.simpleName,
+                        System.currentTimeMillis() + delay,
+                        System.currentTimeMillis()
+                    )
                 }
             }
         }
         return if (hadFailure) Result.retry() else Result.success()
+    }
+
+    private suspend fun verifyLocalOwnership(recordType: String, recordId: String, firebaseUid: String) {
+        val contributorId = when (recordType.uppercase()) {
+            "LEXICON" -> database.lexiconDao().getById(recordId)?.contributorId
+            "SENTENCE" -> database.sentenceDao().getById(recordId)?.contributorId
+            "SPEECH" -> database.speechDao().getById(recordId)?.contributorId
+            "STORY" -> database.storyDao().getById(recordId)?.contributorId
+            "KNOWLEDGE" -> database.knowledgeDao().getById(recordId)?.contributorId
+            "IMAGE" -> database.imageDao().getById(recordId)?.contributorId
+            else -> throw IllegalArgumentException("Unsupported record type: $recordType")
+        } ?: throw IllegalStateException("Local record not found: $recordId")
+
+        val profile = database.userDao().getUserById(contributorId)
+            ?: throw IllegalStateException("Contributor profile not found: $contributorId")
+        require(profile.firebaseUid == firebaseUid) {
+            "Local contributor profile is not bound to the authenticated Firebase account."
+        }
     }
 
     private suspend fun syncRecord(recordType: String, recordId: String) {
@@ -77,5 +102,6 @@ class CloudSyncWorker(
         private const val BASE_BACKOFF_MS = 30_000L
         private const val MAX_BACKOFF_MS = 6 * 60 * 60 * 1000L
         private const val SECURITY_RETRY_MS = 60 * 60 * 1000L
+        private const val COMPLETED_RETENTION_MS = 7 * 24 * 60 * 60 * 1000L
     }
 }
