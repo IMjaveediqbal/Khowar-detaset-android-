@@ -15,14 +15,13 @@ class RbacService(
 
     suspend fun getAuthorization(): Authorization = runCatching {
         requireAuth()
-        val result = functions.getHttpsCallable("getMyAuthorization").call().await()
+        val result = functions.getHttpsCallable("getMyRbac").call().await()
         val data = result.data as? Map<*, *> ?: error("Invalid authorization response.")
         val role = runCatching { UserRole.valueOf(data["role"].toString().uppercase()) }.getOrDefault(UserRole.CONTRIBUTOR)
-        val permissions = (data["permissions"] as? List<*>)
-            ?.mapNotNull { runCatching { Permission.valueOf(it.toString()) }.getOrNull() }
-            ?.toSet().orEmpty()
-        Authorization(auth.currentUser!!.uid, role, permissions)
-    }.getOrElse { Authorization(auth.currentUser?.uid, UserRole.CONTRIBUTOR, setOf(Permission.READ_PUBLIC_DATASET)) }
+        Authorization(auth.currentUser!!.uid, role, com.example.data.model.RbacPolicy.permissionsFor(role))
+    }.getOrElse {
+        Authorization(auth.currentUser?.uid, UserRole.CONTRIBUTOR, setOf(Permission.READ_PUBLIC_DATASET))
+    }
 
     suspend fun transitionDataStage(collection: String, recordId: String, targetStage: String, comments: String = "", confidenceScore: Int = 0): Result<Unit> = runCatching {
         requireAuth()
@@ -37,13 +36,12 @@ class RbacService(
         Unit
     }
 
-    suspend fun setUserRole(targetUid: String, role: String, reason: String): Result<Unit> = runCatching {
+    suspend fun setUserRole(targetUid: String, role: UserRole, reason: String): Result<Unit> = runCatching {
         requireAuth()
         require(targetUid.isNotBlank()) { "User UID is required." }
-        require(role.trim().uppercase() in RbacServerRoles.ALL) { "Invalid role." }
         require(reason.trim().length in 5..1000) { "A role-change reason of 5–1000 characters is required." }
         functions.getHttpsCallable("setUserRole").call(mapOf(
-            "targetUid" to targetUid.trim(), "role" to role.trim().uppercase(), "reason" to reason.trim()
+            "targetUid" to targetUid.trim(), "role" to role.name, "reason" to reason.trim()
         )).await()
         Unit
     }
@@ -51,8 +49,4 @@ class RbacService(
 
 data class Authorization(val uid: String?, val role: UserRole, val permissions: Set<Permission>) {
     fun can(permission: Permission): Boolean = permission in permissions
-}
-
-private object RbacServerRoles {
-    val ALL = setOf("VISITOR", "CONTRIBUTOR", "VALIDATOR", "EXPERT", "RESEARCHER", "MODERATOR", "DATA_STEWARD", "AUDITOR", "ADMIN", "SUPER_ADMIN")
 }
