@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,11 +14,14 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.auth.AuthScreen
 import com.example.auth.AuthService
+import com.example.auth.FirebaseProfileBinder
 import com.example.community.CommunityScreen
 import com.example.community.CommunityUiState
+import com.example.data.local.AppDatabase
 import com.example.ui.components.AppHeader
 import com.example.ui.components.AppNavigationBar
 import com.example.ui.screens.*
@@ -41,6 +45,9 @@ class MainActivity : ComponentActivity() {
             val currentUser by viewModel.currentUser.collectAsState()
 
             val authService = remember { AuthService() }
+            val profileBinder = remember {
+                FirebaseProfileBinder(AppDatabase.getDatabase(applicationContext, lifecycleScope))
+            }
             var firebaseUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
             var authReady by remember { mutableStateOf(false) }
 
@@ -56,9 +63,24 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(firebaseUser?.uid) {
                 val user = firebaseUser
                 if (user != null && user.isEmailVerified) {
-                    val displayName = user.displayName ?: user.email?.substringBefore("@") ?: "Contributor"
-                    val username = user.email?.substringBefore("@") ?: "contributor"
-                    viewModel.loginOrRegister(user.email ?: "", displayName, username, com.example.data.model.UserRole.CONTRIBUTOR, "Chitral")
+                    runCatching {
+                        profileBinder.bind(
+                            firebaseUser = user,
+                            displayName = user.displayName,
+                            username = user.email?.substringBefore("@"),
+                            region = "Chitral"
+                        )
+                    }.onSuccess { boundProfile ->
+                        viewModel.loginOrRegister(
+                            boundProfile.email,
+                            boundProfile.displayName,
+                            boundProfile.username,
+                            com.example.data.model.UserRole.CONTRIBUTOR,
+                            boundProfile.region
+                        )
+                    }.onFailure {
+                        FirebaseAuth.getInstance().signOut()
+                    }
                 }
             }
 
@@ -89,13 +111,21 @@ class MainActivity : ComponentActivity() {
                             onAuthenticated = { displayName, username, region ->
                                 val user = FirebaseAuth.getInstance().currentUser
                                 if (user?.isEmailVerified == true && !user.email.isNullOrBlank()) {
-                                    viewModel.loginOrRegister(
-                                        user.email!!,
-                                        displayName.ifBlank { user.email!!.substringBefore("@") },
-                                        username.ifBlank { user.email!!.substringBefore("@") },
-                                        com.example.data.model.UserRole.CONTRIBUTOR,
-                                        region.ifBlank { "Chitral" }
-                                    )
+                                    coroutineScope.launch {
+                                        runCatching {
+                                            profileBinder.bind(user, displayName, username, region)
+                                        }.onSuccess { boundProfile ->
+                                            viewModel.loginOrRegister(
+                                                boundProfile.email,
+                                                boundProfile.displayName,
+                                                boundProfile.username,
+                                                com.example.data.model.UserRole.CONTRIBUTOR,
+                                                boundProfile.region
+                                            )
+                                        }.onFailure {
+                                            authService.signOut()
+                                        }
+                                    }
                                 }
                             }
                         )
