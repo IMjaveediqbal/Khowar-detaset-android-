@@ -11,12 +11,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LexiconDao {
-    @Query("SELECT * FROM lexicon_entries WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<LexiconEntry>>
-    @Query("SELECT * FROM lexicon_entries WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
-    fun getReviewQueue(): Flow<List<LexiconEntry>>
-    @Query("SELECT * FROM lexicon_entries WHERE contributorId = :userId ORDER BY createdAt DESC")
-    fun getByContributor(userId: String): Flow<List<LexiconEntry>>
+    @Query("SELECT * FROM lexicon_entries WHERE status = 'APPROVED' ORDER BY createdAt DESC") fun getAllApproved(): Flow<List<LexiconEntry>>
+    @Query("SELECT * FROM lexicon_entries WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC") fun getReviewQueue(): Flow<List<LexiconEntry>>
+    @Query("SELECT * FROM lexicon_entries WHERE contributorId = :userId ORDER BY createdAt DESC") fun getByContributor(userId: String): Flow<List<LexiconEntry>>
     @Query("SELECT * FROM lexicon_entries WHERE id = :id") suspend fun getById(id: String): LexiconEntry?
     @Query("SELECT * FROM lexicon_entries WHERE normalizedKhowarWord = :normalizedWord LIMIT 5") suspend fun findDuplicates(normalizedWord: String): List<LexiconEntry>
     @Query("SELECT COUNT(*) FROM lexicon_entries WHERE status = 'APPROVED'") fun countApproved(): Flow<Int>
@@ -97,6 +94,19 @@ interface UserDao {
     @Query("SELECT COUNT(DISTINCT contributorId) FROM (SELECT contributorId FROM lexicon_entries WHERE status = 'APPROVED' UNION SELECT contributorId FROM sentences WHERE status = 'APPROVED' UNION SELECT contributorId FROM speech_recordings WHERE status = 'APPROVED' UNION SELECT contributorId FROM stories WHERE status = 'APPROVED' UNION SELECT contributorId FROM images WHERE status = 'APPROVED' UNION SELECT contributorId FROM knowledge WHERE status = 'APPROVED')") fun countActiveContributors(): Flow<Int>
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insert(user: User)
     @Update suspend fun update(user: User)
+}
+
+@Dao
+interface SyncOperationDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insert(operation: SyncOperation): Long
+    @Update suspend fun update(operation: SyncOperation)
+    @Query("SELECT * FROM sync_operations WHERE state IN ('PENDING', 'FAILED') AND nextAttemptAt <= :now ORDER BY createdAt ASC LIMIT :limit") suspend fun getDue(now: Long, limit: Int): List<SyncOperation>
+    @Query("SELECT * FROM sync_operations WHERE id = :id LIMIT 1") suspend fun getById(id: String): SyncOperation?
+    @Query("UPDATE sync_operations SET state = 'UPLOADING', updatedAt = :now WHERE id = :id AND state IN ('PENDING', 'FAILED')") suspend fun markUploading(id: String, now: Long): Int
+    @Query("UPDATE sync_operations SET state = 'COMPLETED', lastError = NULL, updatedAt = :now WHERE id = :id") suspend fun markCompleted(id: String, now: Long)
+    @Query("UPDATE sync_operations SET state = 'FAILED', attempts = attempts + 1, lastError = :error, nextAttemptAt = :nextAttemptAt, updatedAt = :now WHERE id = :id") suspend fun markFailed(id: String, error: String, nextAttemptAt: Long, now: Long)
+    @Query("UPDATE sync_operations SET state = 'PENDING', updatedAt = :now WHERE state = 'UPLOADING' AND updatedAt < :staleBefore") suspend fun recoverStale(staleBefore: Long, now: Long): Int
+    @Query("SELECT COUNT(*) FROM sync_operations WHERE state IN ('PENDING', 'UPLOADING', 'FAILED')") fun countPending(): Flow<Int>
 }
 
 @Dao
