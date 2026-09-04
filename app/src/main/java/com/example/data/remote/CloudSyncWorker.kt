@@ -22,25 +22,21 @@ class CloudSyncWorker(
     private val firebase = FirebaseSyncService()
 
     override suspend fun doWork(): Result {
-        val user = FirebaseAuth.getInstance().currentUser
-            ?: return Result.failure()
+        val user = FirebaseAuth.getInstance().currentUser ?: return Result.failure()
         if (!user.isEmailVerified) return Result.failure()
 
         val queue = database.syncOperationDao()
         queue.recoverStale(System.currentTimeMillis() - STALE_UPLOAD_MS, System.currentTimeMillis())
+        var hadFailure = false
 
         repeat(MAX_BATCHES) {
             val operations = queue.getDue(System.currentTimeMillis(), BATCH_SIZE)
-            if (operations.isEmpty()) return Result.success()
+            if (operations.isEmpty()) return if (hadFailure) Result.retry() else Result.success()
 
             for (operation in operations) {
                 if (operation.ownerFirebaseUid != user.uid) {
-                    queue.markFailed(
-                        operation.id,
-                        "Authenticated Firebase UID does not own this queued operation.",
-                        System.currentTimeMillis() + SECURITY_RETRY_MS,
-                        System.currentTimeMillis()
-                    )
+                    queue.markFailed(operation.id, "Authenticated Firebase UID does not own this queued operation.", System.currentTimeMillis() + SECURITY_RETRY_MS, System.currentTimeMillis())
+                    hadFailure = true
                     continue
                 }
                 if (queue.markUploading(operation.id, System.currentTimeMillis()) == 0) continue
@@ -52,34 +48,24 @@ class CloudSyncWorker(
                     }
                     queue.markCompleted(operation.id, System.currentTimeMillis())
                 } catch (error: Throwable) {
+                    hadFailure = true
                     val attempt = operation.attempts + 1
                     val delay = min(MAX_BACKOFF_MS, BASE_BACKOFF_MS * (1L shl min(attempt, 6)))
-                    queue.markFailed(
-                        operation.id,
-                        error.message ?: error::class.java.simpleName,
-                        System.currentTimeMillis() + delay,
-                        System.currentTimeMillis()
-                    )
+                    queue.markFailed(operation.id, error.message ?: error::class.java.simpleName, System.currentTimeMillis() + delay, System.currentTimeMillis())
                 }
             }
         }
-        return Result.success()
+        return if (hadFailure) Result.retry() else Result.success()
     }
 
     private suspend fun syncRecord(recordType: String, recordId: String) {
         when (recordType.uppercase()) {
-            "LEXICON" -> database.lexiconDao().getById(recordId)?.let { firebase.syncLexicon(it) }
-                ?: throw IllegalStateException("Local lexicon record not found: $recordId")
-            "SENTENCE" -> database.sentenceDao().getById(recordId)?.let { firebase.syncSentence(it) }
-                ?: throw IllegalStateException("Local sentence record not found: $recordId")
-            "SPEECH" -> database.speechDao().getById(recordId)?.let { firebase.syncSpeech(it) }
-                ?: throw IllegalStateException("Local speech record not found: $recordId")
-            "STORY" -> database.storyDao().getById(recordId)?.let { firebase.syncStory(it) }
-                ?: throw IllegalStateException("Local story record not found: $recordId")
-            "KNOWLEDGE" -> database.knowledgeDao().getById(recordId)?.let { firebase.syncKnowledge(it) }
-                ?: throw IllegalStateException("Local knowledge record not found: $recordId")
-            "IMAGE" -> database.imageDao().getById(recordId)?.let { firebase.syncImage(it) }
-                ?: throw IllegalStateException("Local image record not found: $recordId")
+            "LEXICON" -> database.lexiconDao().getById(recordId)?.let { firebase.syncLexicon(it) } ?: throw IllegalStateException("Local lexicon record not found: $recordId")
+            "SENTENCE" -> database.sentenceDao().getById(recordId)?.let { firebase.syncSentence(it) } ?: throw IllegalStateException("Local sentence record not found: $recordId")
+            "SPEECH" -> database.speechDao().getById(recordId)?.let { firebase.syncSpeech(it) } ?: throw IllegalStateException("Local speech record not found: $recordId")
+            "STORY" -> database.storyDao().getById(recordId)?.let { firebase.syncStory(it) } ?: throw IllegalStateException("Local story record not found: $recordId")
+            "KNOWLEDGE" -> database.knowledgeDao().getById(recordId)?.let { firebase.syncKnowledge(it) } ?: throw IllegalStateException("Local knowledge record not found: $recordId")
+            "IMAGE" -> database.imageDao().getById(recordId)?.let { firebase.syncImage(it) } ?: throw IllegalStateException("Local image record not found: $recordId")
             else -> throw IllegalArgumentException("Unsupported record type: $recordType")
         }
     }
