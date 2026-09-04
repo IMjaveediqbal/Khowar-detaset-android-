@@ -10,10 +10,29 @@ import kotlinx.coroutines.tasks.await
 class RbacRemoteService(
     private val functions: FirebaseFunctions = FirebaseFunctions.getInstance()
 ) {
-    suspend fun setUserRole(targetUid: String, role: String): Result<Unit> = runCatching {
+    suspend fun getMyRbac(): Result<Pair<String, String>> = runCatching {
+        val result = functions.getHttpsCallable("getMyRbac").call().await()
+        val data = result.data as? Map<*, *>
+            ?: error("Invalid RBAC response.")
+        val uid = data["uid"]?.toString().orEmpty()
+        val role = data["role"]?.toString()?.uppercase().orEmpty()
+        require(uid.isNotBlank() && role.isNotBlank()) { "Invalid RBAC identity." }
+        uid to role
+    }
+
+    suspend fun setUserRole(
+        targetUid: String,
+        role: String,
+        reason: String
+    ): Result<Unit> = runCatching {
         require(targetUid.isNotBlank()) { "Target user is required." }
+        require(reason.trim().length >= 5) { "A role-change reason is required." }
         functions.getHttpsCallable("setUserRole").call(
-            mapOf("targetUid" to targetUid, "role" to role.uppercase())
+            mapOf(
+                "targetUid" to targetUid,
+                "role" to role.uppercase(),
+                "reason" to reason.trim()
+            )
         ).await()
         Unit
     }
