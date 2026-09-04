@@ -40,12 +40,17 @@ class RbacService(
         Unit
     }
 
-    suspend fun setUserRole(uid: String, role: String): Result<Unit> = runCatching {
+    suspend fun setUserRole(targetUid: String, role: String, reason: String): Result<Unit> = runCatching {
         requireAuth()
-        require(uid.isNotBlank()) { "User UID is required." }
+        require(targetUid.isNotBlank()) { "User UID is required." }
         require(role.trim().uppercase() in RbacServerRoles.ALL) { "Invalid role." }
+        require(reason.trim().length in 5..1000) { "A role-change reason of 5–1000 characters is required." }
         functions.getHttpsCallable("setUserRole").call(
-            mapOf("uid" to uid.trim(), "role" to role.trim().uppercase())
+            mapOf(
+                "targetUid" to targetUid.trim(),
+                "role" to role.trim().uppercase(),
+                "reason" to reason.trim()
+            )
         ).await()
         Unit
     }
