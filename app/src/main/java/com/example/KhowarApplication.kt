@@ -2,7 +2,6 @@ package com.example
 
 import android.app.Application
 import com.example.data.local.AppDatabase
-import com.example.data.remote.FirebaseSyncService
 import com.example.data.remote.RoomCloudSync
 import com.google.firebase.FirebaseApp
 import kotlinx.coroutines.CoroutineScope
@@ -17,10 +16,10 @@ class KhowarApplication : Application() {
         val database = AppDatabase.getDatabase(this, appScope)
 
         // Firebase is optional until google-services.json is configured.
-        // The local Room dataset remains usable without cloud configuration.
+        // Room remains the local source of truth; WorkManager uploads when connected.
         val firebaseApp = FirebaseApp.initializeApp(this)
         if (firebaseApp != null) {
-            RoomCloudSync(database, FirebaseSyncService()).start(appScope)
+            RoomCloudSync(this, database).start(appScope)
         }
     }
 }
