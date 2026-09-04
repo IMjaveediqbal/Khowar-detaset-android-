@@ -42,6 +42,13 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     val scope = rememberCoroutineScope()
     val rbac = remember { RbacService() }
 
+    if (!RbacPolicy.isAdministrative(currentUser?.role)) {
+        Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            EmptyStateView(title = "Administrator access required", subtitle = "This workspace is protected by server-authoritative RBAC.")
+        }
+        return
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -52,12 +59,14 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Dataset Governance & Admin", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         }
-                        Text("Platform oversight, user role provisioning, dataset version releases, and audit logs", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("RBAC, user provisioning, dataset releases and audit logs", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Button(onClick = { showReleaseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) {
-                        Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("New Release", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    if (RbacPolicy.can(currentUser?.role, com.example.security.RbacPermission.RELEASE_DATASET)) {
+                        Button(onClick = { showReleaseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) {
+                            Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("New Release", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
@@ -85,10 +94,7 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
             currentRole = currentUser?.role,
             onRoleSelected = { role ->
                 scope.launch {
-                    val result = rbac.setUserRole(targetUser.id, role.name)
-                    result.onSuccess { viewModel.clearStatusMessage(); viewModel.navigateTo(com.example.ui.viewmodel.AppScreen.ADMIN) }
-                    result.onFailure { /* surfaced through local admin flow below */ }
-                    viewModel.loginOrRegister(targetUser.email, targetUser.displayName, targetUser.username, targetUser.role, targetUser.region)
+                    rbac.setUserRole(targetEmail = targetUser.email, role = role)
                 }
                 selectedUserForRoleChange = null
             },
@@ -181,13 +187,16 @@ fun RoleChangeDialog(targetUser: User, currentRole: UserRole?, onRoleSelected: (
         Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Change User Role: ${targetUser.displayName}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("Role changes are verified by the server and audited.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Changes are verified by Firebase Functions and recorded in the audit ledger.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(12.dp))
                 UserRole.values().filter { it != UserRole.VISITOR && (currentRole == UserRole.SUPER_ADMIN || it != UserRole.SUPER_ADMIN) }.forEach { role ->
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onRoleSelected(role) }.padding(vertical = 8.dp)) {
                         RadioButton(selected = targetUser.role == role, onClick = null)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(role.name, fontWeight = FontWeight.Medium)
+                        Column {
+                            Text(role.name, fontWeight = FontWeight.Medium)
+                            Text(roleDescription(role), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
@@ -195,4 +204,15 @@ fun RoleChangeDialog(targetUser: User, currentRole: UserRole?, onRoleSelected: (
             }
         }
     }
+}
+
+private fun roleDescription(role: UserRole): String = when (role) {
+    UserRole.VISITOR -> "Public browsing only"
+    UserRole.CONTRIBUTOR -> "Submit and manage contributions"
+    UserRole.VALIDATOR -> "Peer validation of submissions"
+    UserRole.EXPERT -> "Linguistic and cultural expert verification"
+    UserRole.RESEARCHER -> "Research access, exports and API keys"
+    UserRole.MODERATOR -> "Community moderation and reports"
+    UserRole.ADMIN -> "Platform governance and administration"
+    UserRole.SUPER_ADMIN -> "Full platform authority"
 }
