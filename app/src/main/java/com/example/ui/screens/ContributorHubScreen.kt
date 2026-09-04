@@ -26,6 +26,7 @@ import com.example.ui.viewmodel.KhowarViewModel
 @Composable
 fun ContributorHubScreen(
     viewModel: KhowarViewModel,
+    onOpenForms: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val lexiconQueue by viewModel.lexiconQueue.collectAsState()
@@ -77,6 +78,7 @@ fun ContributorHubScreen(
                         else -> ContributeTab.WORD
                     }
                     viewModel.setContributeTab(tab)
+                    onOpenForms()
                 },
                 modifier = Modifier.height(430.dp)
             )
