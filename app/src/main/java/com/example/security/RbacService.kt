@@ -18,12 +18,13 @@ class RbacService(
         UserRole.valueOf(roleName)
     }
 
-    suspend fun setUserRole(targetUid: String, role: UserRole): Result<Unit> = runCatching {
+    suspend fun setUserRole(targetUid: String? = null, targetEmail: String? = null, role: UserRole): Result<Unit> = runCatching {
         require(auth.currentUser != null) { "Authentication is required." }
-        require(targetUid.isNotBlank()) { "Target Firebase UID is required." }
-        functions.getHttpsCallable("setUserRole")
-            .call(mapOf("targetUid" to targetUid.trim(), "role" to role.name))
-            .await()
+        val data = mutableMapOf<String, Any>("role" to role.name)
+        if (!targetUid.isNullOrBlank()) data["targetUid"] = targetUid.trim()
+        if (!targetEmail.isNullOrBlank()) data["targetEmail"] = targetEmail.trim().lowercase()
+        require(data.containsKey("targetUid") || data.containsKey("targetEmail")) { "Target Firebase UID or email is required." }
+        functions.getHttpsCallable("setUserRole").call(data).await()
         Unit
     }
 
@@ -35,15 +36,13 @@ class RbacService(
         confidenceScore: Int
     ): Result<Unit> = runCatching {
         require(auth.currentUser != null) { "Authentication is required." }
-        functions.getHttpsCallable("transitionDataStage")
-            .call(mapOf(
-                "collection" to collection.lowercase(),
-                "recordId" to recordId.trim(),
-                "targetStage" to targetStage.uppercase(),
-                "comments" to comments.trim(),
-                "confidenceScore" to confidenceScore
-            ))
-            .await()
+        functions.getHttpsCallable("transitionDataStage").call(mapOf(
+            "collection" to collection.lowercase(),
+            "recordId" to recordId.trim(),
+            "targetStage" to targetStage.uppercase(),
+            "comments" to comments.trim(),
+            "confidenceScore" to confidenceScore
+        )).await()
         Unit
     }
 }
