@@ -13,8 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [User::class, Region::class, Dialect::class, License::class, LexiconEntry::class, SentenceEntry::class, SpeechRecording::class, StoryEntry::class, ImageEntry::class, KnowledgeEntry::class, ConsentRecord::class, ValidationReview::class, DatasetVersion::class, ApiKey::class, AuditLog::class, ModerationReport::class],
-    version = 3,
+    entities = [User::class, Region::class, Dialect::class, License::class, LexiconEntry::class, SentenceEntry::class, SpeechRecording::class, StoryEntry::class, ImageEntry::class, KnowledgeEntry::class, ConsentRecord::class, ValidationReview::class, DatasetVersion::class, ApiKey::class, AuditLog::class, ModerationReport::class, SyncOperation::class],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -28,6 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun validationDao(): ValidationDao
     abstract fun consentDao(): ConsentDao
     abstract fun metadataDao(): MetadataDao
+    abstract fun syncOperationDao(): SyncOperationDao
 
     companion object {
         private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -45,11 +46,19 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        /** Binds legacy local profiles to Firebase identity without deleting any contribution rows. */
         private val MIGRATION_2_3 = object : Migration(2, 3) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE users ADD COLUMN firebaseUid TEXT")
                 db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_users_firebaseUid ON users(firebaseUid)")
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS sync_operations (id TEXT NOT NULL, idempotencyKey TEXT NOT NULL, recordType TEXT NOT NULL, recordId TEXT NOT NULL, operationType TEXT NOT NULL, ownerFirebaseUid TEXT NOT NULL, state TEXT NOT NULL, attempts INTEGER NOT NULL, lastError TEXT, nextAttemptAt INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(id))")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_sync_operations_idempotencyKey ON sync_operations(idempotencyKey)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_operations_state_nextAttemptAt ON sync_operations(state, nextAttemptAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_operations_ownerFirebaseUid ON sync_operations(ownerFirebaseUid)")
             }
         }
 
@@ -61,7 +70,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "khowar_dataset.db"
             )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .addCallback(AppDatabaseCallback(scope))
                 .build()
             INSTANCE = instance
