@@ -4,7 +4,16 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.util.UUID
 
-enum class UserRole { VISITOR, CONTRIBUTOR, VALIDATOR, RESEARCHER, MODERATOR, ADMIN, SUPER_ADMIN }
+enum class UserRole {
+    VISITOR,
+    CONTRIBUTOR,
+    VALIDATOR,
+    EXPERT,
+    RESEARCHER,
+    MODERATOR,
+    ADMIN,
+    SUPER_ADMIN
+}
 
 enum class RecordStatus { DRAFT, SUBMITTED, UNDER_REVIEW, APPROVED, REJECTED, CHANGES_REQUESTED, ARCHIVED }
 
