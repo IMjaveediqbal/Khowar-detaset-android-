@@ -8,6 +8,7 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.*
@@ -63,7 +64,6 @@ class MainActivity : ComponentActivity() {
             val storyQueue by viewModel.storyQueue.collectAsState()
             val totalQueueCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size
             val role = currentUser?.role
-
             val snackbarHostState = remember { SnackbarHostState() }
             val coroutineScope = rememberCoroutineScope()
 
@@ -92,28 +92,15 @@ class MainActivity : ComponentActivity() {
                     Scaffold(
                         topBar = { AppHeader(viewModel = viewModel) },
                         bottomBar = {
-                            AppNavigationBar(
-                                currentScreen = currentScreen,
-                                onNavigate = ::navigateWithRbac,
-                                lang = currentLanguage,
-                                reviewQueueCount = totalQueueCount
-                            )
+                            AppNavigationBar(currentScreen = currentScreen, onNavigate = ::navigateWithRbac, lang = currentLanguage, reviewQueueCount = totalQueueCount)
                         },
                         floatingActionButton = {
-                            ExtendedFloatingActionButton(
-                                onClick = { CommunityUiState.show() },
-                                icon = { Icon(Icons.Default.Groups, contentDescription = null) },
-                                text = { Text("Community") }
-                            )
+                            ExtendedFloatingActionButton(onClick = { CommunityUiState.show() }, icon = { Icon(Icons.Default.Groups, contentDescription = null) }, text = { Text("Community") })
                         },
                         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                         modifier = Modifier.fillMaxSize()
                     ) { innerPadding ->
-                        Crossfade(
-                            targetState = currentScreen,
-                            label = "ScreenTransition",
-                            modifier = Modifier.padding(innerPadding)
-                        ) { screen ->
+                        Crossfade(targetState = currentScreen, label = "ScreenTransition", modifier = Modifier.padding(innerPadding)) { screen ->
                             when (screen) {
                                 AppScreen.HOME -> HomeScreen(viewModel = viewModel)
                                 AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
@@ -127,11 +114,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-
                     if (communityOpen) {
-                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                            CommunityScreen(viewModel = viewModel)
-                        }
+                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { CommunityScreen(viewModel = viewModel) }
                     }
                 }
             }
