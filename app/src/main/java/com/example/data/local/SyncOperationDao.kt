@@ -23,6 +23,9 @@ interface SyncOperationDao {
     @Query("UPDATE sync_operations SET state='FAILED', attempts=attempts+1, lastError=:error, nextAttemptAt=:nextAttemptAt, updatedAt=:now WHERE id=:id")
     suspend fun markFailed(id: String, error: String, nextAttemptAt: Long, now: Long)
 
+    @Query("UPDATE sync_operations SET state='REJECTED', lastError=:error, updatedAt=:now WHERE id=:id")
+    suspend fun markRejected(id: String, error: String, now: Long)
+
     @Query("UPDATE sync_operations SET state='PENDING', updatedAt=:now WHERE state='UPLOADING' AND updatedAt < :staleBefore")
     suspend fun recoverStale(staleBefore: Long, now: Long): Int
 
