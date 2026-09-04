@@ -84,10 +84,7 @@ class MainActivity : ComponentActivity() {
                             when (screen) {
                                 AppScreen.HOME -> HomeScreen(viewModel = viewModel)
                                 AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
-                                AppScreen.CONTRIBUTE -> ContributorHubScreen(
-                                    viewModel = viewModel,
-                                    onOpenForms = { viewModel.navigateTo(AppScreen.CONTRIBUTE) }
-                                )
+                                AppScreen.CONTRIBUTE -> ContributorHubScreen(viewModel = viewModel)
                                 AppScreen.VALIDATE -> ValidateScreen(viewModel = viewModel)
                                 AppScreen.STATS -> StatsScreen(viewModel = viewModel)
                                 AppScreen.RESEARCH -> ResearcherScreen(viewModel = viewModel)
