@@ -32,13 +32,13 @@ const hasUnresolvedModeration = async (recordId: string) => {
   return !snapshot.empty;
 };
 
-export const getMyRbac = onCall(async (request) => {
+export const getMyRbac = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   const role = await getTrustedRole(request.auth.uid, request.auth.token as Record<string, unknown>);
   return { uid: request.auth.uid, role: role || "CONTRIBUTOR" };
 });
 
-export const setUserRole = onCall(async (request) => {
+export const setUserRole = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   const actorRole = await requireRole(request.auth.uid, request.auth.token as Record<string, unknown>, ["ADMIN", "SUPER_ADMIN"]);
   const targetUid = String(request.data?.targetUid ?? "").trim();
@@ -58,7 +58,7 @@ export const setUserRole = onCall(async (request) => {
   return { ok: true, targetUid: targetUser.uid, role: targetRole };
 });
 
-export const reviewSubmission = onCall(async (request) => {
+export const reviewSubmission = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   await requireRole(request.auth.uid, request.auth.token as Record<string, unknown>, ["VALIDATOR", "EXPERT", "DATA_STEWARD", "ADMIN", "SUPER_ADMIN"]);
   const collection = String(request.data?.collection ?? "").trim().toLowerCase();
@@ -75,7 +75,7 @@ export const reviewSubmission = onCall(async (request) => {
   return { ok: true, collection, recordId, status: decision };
 });
 
-export const transitionDataStage = onCall(async (request) => {
+export const transitionDataStage = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   const collection = String(request.data?.collection ?? "").trim().toLowerCase();
   const recordId = String(request.data?.recordId ?? "").trim();
@@ -115,7 +115,7 @@ export const transitionDataStage = onCall(async (request) => {
   return { ok: true, collection, recordId, stage: targetStage };
 });
 
-export const voteOnCommunityPost = onCall(async (request) => {
+export const voteOnCommunityPost = onCall({ enforceAppCheck: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   const postId = String(request.data?.postId ?? "").trim();
   if (!postId) throw new HttpsError("invalid-argument", "postId is required.");
