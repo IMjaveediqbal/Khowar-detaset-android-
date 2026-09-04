@@ -11,7 +11,9 @@ import com.example.data.local.AppDatabase
 import com.example.data.model.*
 import com.example.data.repository.DatasetStatistics
 import com.example.data.repository.KhowarRepository
+import com.example.data.repository.RbacRemoteService
 import com.example.ui.i18n.AppLanguage
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -50,6 +52,8 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
 
     private val database = AppDatabase.getDatabase(application, viewModelScope)
     val repository = KhowarRepository(database)
+    private val rbacRemoteService = RbacRemoteService()
+    private val firebaseAuth = FirebaseAuth.getInstance()
 
     val audioRecorder = AudioRecorderHelper(application)
     val audioPlayer = AudioPlayerHelper()
@@ -131,15 +135,41 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
     val generatedApiKey: StateFlow<Pair<String, ApiKey>?> = _generatedApiKey.asStateFlow()
 
     init {
-        // Auto-initialize demo session if empty so user can test all roles immediately
+        // Never create a privileged/demo session automatically. Firebase Authentication and
+        // server-side custom claims are the authority for identity and RBAC.
+        if (firebaseAuth.currentUser != null) {
+            refreshTrustedRole()
+        }
+    }
+
+    /** Refresh the local role cache from the trusted Firebase Functions RBAC endpoint. */
+    fun refreshTrustedRole() {
         viewModelScope.launch {
-            repository.registerOrLoginUser(
-                email = "researcher@khowar-dataset.org",
-                displayName = "Prof. Chitrali Linguist",
-                username = "chitrali_linguist",
-                role = UserRole.VALIDATOR,
-                region = "Chitral Upper"
-            )
+            val authUser = firebaseAuth.currentUser
+            if (authUser == null) {
+                _statusMessage.value = "Please sign in to load your account permissions."
+                return@launch
+            }
+            rbacRemoteService.getMyRbac()
+                .onSuccess { (uid, roleName) ->
+                    if (uid != authUser.uid) {
+                        _statusMessage.value = "RBAC identity mismatch; session rejected."
+                        return@onSuccess
+                    }
+                    val localUser = currentUser.value
+                    if (localUser != null && localUser.id == uid) {
+                        val role = runCatching { UserRole.valueOf(roleName) }.getOrDefault(UserRole.CONTRIBUTOR)
+                        if (localUser.role != role) {
+                            val updated = localUser.copy(role = role)
+                            database.userDao().update(updated)
+                            repository.setCurrentUser(updated)
+                        }
+                    }
+                    _statusMessage.value = "Permissions refreshed from the server."
+                }
+                .onFailure {
+                    _statusMessage.value = "Could not refresh permissions: ${it.message}"
+                }
         }
     }
 
@@ -179,26 +209,35 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
         _statusMessage.value = null
     }
 
+    /**
+     * Legacy UI hook retained for compatibility. Roles cannot be changed locally anymore.
+     * The server must assign the role through Firebase custom claims.
+     */
     fun switchUserRole(role: UserRole) {
-        val user = currentUser.value ?: return
-        viewModelScope.launch {
-            val updated = user.copy(role = role)
-            database.userDao().update(updated)
-            repository.setCurrentUser(updated)
-            _statusMessage.value = "Active profile switched to role: $role"
-        }
+        _statusMessage.value = "Role switching is disabled. Roles are assigned by the server. Requested: $role"
+        refreshTrustedRole()
     }
 
-    fun updateUserRole(userId: String, role: UserRole) {
+    /** Assign a role through the trusted backend. The local Room role is only a cache. */
+    fun updateUserRole(userId: String, role: UserRole, reason: String = "Role assignment approved by administrator") {
         viewModelScope.launch {
-            val user = database.userDao().getById(userId)
-            if (user != null) {
-                val updated = user.copy(role = role)
-                database.userDao().update(updated)
-                if (currentUser.value?.id == userId) {
-                    repository.setCurrentUser(updated)
+            if (userId.isBlank()) {
+                _statusMessage.value = "Role update failed: target user is required."
+                return@launch
+            }
+            val res = rbacRemoteService.setUserRole(userId, role.name, reason)
+            res.onSuccess {
+                val user = database.userDao().getById(userId)
+                if (user != null) {
+                    database.userDao().update(user.copy(role = role))
+                    if (currentUser.value?.id == userId) {
+                        repository.setCurrentUser(user.copy(role = role))
+                    }
                 }
-                _statusMessage.value = "Updated role for ${user.displayName} to $role"
+                _statusMessage.value = "Role change accepted by the server for $userId."
+                if (currentUser.value?.id == userId) refreshTrustedRole()
+            }.onFailure {
+                _statusMessage.value = "Role update rejected: ${it.message}"
             }
         }
     }
@@ -235,10 +274,15 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /**
+     * Sign-in/registration compatibility hook. The requested role is intentionally ignored;
+     * authenticated users start as contributors until an administrator assigns a higher role.
+     */
     fun loginOrRegister(email: String, name: String, username: String, role: UserRole, region: String) {
         viewModelScope.launch {
-            val user = repository.registerOrLoginUser(email, name, username, role, region)
-            _statusMessage.value = "Signed in as ${user.displayName} (${user.role})"
+            val user = repository.registerOrLoginUser(email, name, username, UserRole.CONTRIBUTOR, region)
+            _statusMessage.value = "Signed in as ${user.displayName} (${UserRole.CONTRIBUTOR}). Server permissions will be refreshed."
+            refreshTrustedRole()
         }
     }
 
@@ -247,8 +291,6 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
             if (khowarWord.length >= 2) {
                 val duplicates = repository.checkLexiconDuplicate(khowarWord)
                 _detectedDuplicates.value = duplicates.map { "${it.khowarWord} (${it.transliteration}) - ${it.englishMeaning}" }
-                
-                // AI Linguistic Assist
                 _aiSuggestion.value = AiAssistanceService.suggestTransliterationAndGrammar(khowarWord, englishMeaning)
             } else {
                 _detectedDuplicates.value = emptyList()
@@ -421,6 +463,31 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
                 onComplete()
             }.onFailure {
                 _statusMessage.value = "Validation error: ${it.message}"
+            }
+        }
+    }
+
+    fun transitionDataStage(
+        collection: String,
+        recordId: String,
+        targetStage: String,
+        comments: String = "",
+        confidenceScore: Int = 0,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val res = rbacRemoteService.transitionDataStage(
+                collection = collection,
+                recordId = recordId,
+                targetStage = targetStage,
+                comments = comments,
+                confidenceScore = confidenceScore
+            )
+            res.onSuccess {
+                _statusMessage.value = "Dataset stage advanced to ${targetStage.uppercase()}."
+                onComplete()
+            }.onFailure {
+                _statusMessage.value = "Stage transition rejected: ${it.message}"
             }
         }
     }
