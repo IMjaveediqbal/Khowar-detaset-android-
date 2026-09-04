@@ -12,8 +12,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -26,9 +29,15 @@ import com.example.ui.viewmodel.KhowarViewModel
 @Composable
 fun ContributorHubScreen(
     viewModel: KhowarViewModel,
-    onOpenForms: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var showForms by remember { mutableStateOf(false) }
+
+    if (showForms) {
+        ContributeScreen(viewModel = viewModel, modifier = modifier)
+        return
+    }
+
     val lexiconQueue by viewModel.lexiconQueue.collectAsState()
     val sentenceQueue by viewModel.sentenceQueue.collectAsState()
     val speechQueue by viewModel.speechQueue.collectAsState()
@@ -78,7 +87,7 @@ fun ContributorHubScreen(
                         else -> ContributeTab.WORD
                     }
                     viewModel.setContributeTab(tab)
-                    onOpenForms()
+                    showForms = true
                 },
                 modifier = Modifier.height(430.dp)
             )
