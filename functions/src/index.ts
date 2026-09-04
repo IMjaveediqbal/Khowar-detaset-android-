@@ -7,17 +7,13 @@ initializeApp();
 const db = getFirestore();
 const auth = getAuth();
 
-const ROLES = ["VISITOR", "CONTRIBUTOR", "VALIDATOR", "EXPERT", "RESEARCHER", "MODERATOR", "ADMIN", "SUPER_ADMIN"] as const;
+const ROLES = ["VISITOR", "CONTRIBUTOR", "VALIDATOR", "EXPERT", "RESEARCHER", "MODERATOR", "DATA_STEWARD", "AUDITOR", "ADMIN", "SUPER_ADMIN"] as const;
 type UserRole = typeof ROLES[number];
-
-const ROLE_RANK: Record<UserRole, number> = { VISITOR: 0, CONTRIBUTOR: 10, VALIDATOR: 20, EXPERT: 30, RESEARCHER: 30, MODERATOR: 30, ADMIN: 80, SUPER_ADMIN: 100 };
+const ROLE_RANK: Record<UserRole, number> = { VISITOR: 0, CONTRIBUTOR: 10, VALIDATOR: 20, EXPERT: 30, RESEARCHER: 30, MODERATOR: 30, DATA_STEWARD: 40, AUDITOR: 40, ADMIN: 80, SUPER_ADMIN: 100 };
 const DATASET_COLLECTIONS = new Set(["lexicon", "sentences", "speech", "stories", "knowledge", "images"]);
 const STAGES = ["RAW", "QUALITY_CHECKED", "COMMUNITY_VERIFIED", "EXPERT_VERIFIED", "RESEARCH_READY", "RELEASED"] as const;
 type DatasetStage = typeof STAGES[number];
-const ALLOWED_TRANSITIONS: Record<DatasetStage, DatasetStage[]> = {
-  RAW: ["QUALITY_CHECKED"], QUALITY_CHECKED: ["COMMUNITY_VERIFIED"], COMMUNITY_VERIFIED: ["EXPERT_VERIFIED"],
-  EXPERT_VERIFIED: ["RESEARCH_READY"], RESEARCH_READY: ["RELEASED"], RELEASED: [],
-};
+const ALLOWED_TRANSITIONS: Record<DatasetStage, DatasetStage[]> = { RAW: ["QUALITY_CHECKED"], QUALITY_CHECKED: ["COMMUNITY_VERIFIED"], COMMUNITY_VERIFIED: ["EXPERT_VERIFIED"], EXPERT_VERIFIED: ["RESEARCH_READY"], RESEARCH_READY: ["RELEASED"], RELEASED: [] };
 
 const getTrustedRole = async (uid: string, token: Record<string, unknown>): Promise<UserRole | ""> => {
   const claimRole = typeof token.role === "string" ? token.role.toUpperCase() : "";
@@ -26,13 +22,11 @@ const getTrustedRole = async (uid: string, token: Record<string, unknown>): Prom
   const role = user.data()?.role;
   return typeof role === "string" && ROLES.includes(role.toUpperCase() as UserRole) ? role.toUpperCase() as UserRole : "";
 };
-
 const requireRole = async (uid: string, token: Record<string, unknown>, allowed: UserRole[]) => {
   const role = await getTrustedRole(uid, token);
   if (!allowed.includes(role as UserRole)) throw new HttpsError("permission-denied", `Required role: ${allowed.join(" or ")}.`);
   return role as UserRole;
 };
-
 const hasUnresolvedModeration = async (recordId: string) => {
   const snapshot = await db.collection("moderationReports").where("recordId", "==", recordId).where("status", "in", ["OPEN", "PENDING", "UNDER_REVIEW"]).limit(1).get();
   return !snapshot.empty;
@@ -44,29 +38,29 @@ export const getMyRbac = onCall(async (request) => {
   return { uid: request.auth.uid, role: role || "CONTRIBUTOR" };
 });
 
-/** Assign roles only through trusted backend administration. */
 export const setUserRole = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
   const actorRole = await requireRole(request.auth.uid, request.auth.token as Record<string, unknown>, ["ADMIN", "SUPER_ADMIN"]);
   const targetUid = String(request.data?.targetUid ?? "").trim();
   const targetEmail = String(request.data?.targetEmail ?? "").trim().toLowerCase();
   const targetRole = String(request.data?.role ?? "").trim().toUpperCase() as UserRole;
+  const reason = String(request.data?.reason ?? "").trim();
   if ((!targetUid && !targetEmail) || !ROLES.includes(targetRole)) throw new HttpsError("invalid-argument", "A target UID/email and valid role are required.");
+  if (reason.length < 5 || reason.length > 1000) throw new HttpsError("invalid-argument", "A role-change reason of 5–1000 characters is required.");
   if (targetRole === "VISITOR") throw new HttpsError("invalid-argument", "Use account suspension/deactivation rather than assigning VISITOR to an authenticated account.");
   if (actorRole === "ADMIN" && ROLE_RANK[targetRole] >= ROLE_RANK.ADMIN) throw new HttpsError("permission-denied", "ADMIN cannot grant ADMIN or SUPER_ADMIN.");
-
   const targetUser = targetUid ? await auth.getUser(targetUid) : await auth.getUserByEmail(targetEmail);
-  if (targetUser.uid === request.auth.uid && targetRole !== actorRole) throw new HttpsError("permission-denied", "You cannot change your own role.");
+  if (targetUser.uid === request.auth.uid) throw new HttpsError("permission-denied", "You cannot change your own role.");
   const previousRole = typeof targetUser.customClaims?.role === "string" ? targetUser.customClaims.role : null;
   await auth.setCustomUserClaims(targetUser.uid, { ...(targetUser.customClaims ?? {}), role: targetRole });
   await db.collection("users").doc(targetUser.uid).set({ role: targetRole, firebaseUid: targetUser.uid, email: targetUser.email ?? targetEmail, roleUpdatedBy: request.auth.uid, roleUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  await db.collection("auditLogs").add({ action: "ROLE_CHANGED", actorUid: request.auth.uid, targetUid: targetUser.uid, previousRole, newRole: targetRole, createdAt: FieldValue.serverTimestamp() });
+  await db.collection("auditLogs").add({ action: "ROLE_CHANGED", actorUid: request.auth.uid, targetUid: targetUser.uid, previousRole, newRole: targetRole, reason, createdAt: FieldValue.serverTimestamp() });
   return { ok: true, targetUid: targetUser.uid, role: targetRole };
 });
 
 export const reviewSubmission = onCall(async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication is required.");
-  await requireRole(request.auth.uid, request.auth.token as Record<string, unknown>, ["VALIDATOR", "EXPERT", "ADMIN", "SUPER_ADMIN"]);
+  await requireRole(request.auth.uid, request.auth.token as Record<string, unknown>, ["VALIDATOR", "EXPERT", "DATA_STEWARD", "ADMIN", "SUPER_ADMIN"]);
   const collection = String(request.data?.collection ?? "").trim().toLowerCase();
   const recordId = String(request.data?.recordId ?? "").trim();
   const decision = String(request.data?.decision ?? "").trim().toUpperCase();
@@ -93,7 +87,7 @@ export const transitionDataStage = onCall(async (request) => {
   if (comments.length > 4000) throw new HttpsError("invalid-argument", "Comments are too long.");
   if (confidenceScore !== 0 && (!Number.isInteger(confidenceScore) || confidenceScore < 1 || confidenceScore > 5)) throw new HttpsError("invalid-argument", "Confidence score must be between 1 and 5.");
   const role = await getTrustedRole(request.auth.uid, request.auth.token as Record<string, unknown>);
-  if (!( ["EXPERT", "VALIDATOR", "ADMIN", "SUPER_ADMIN"] as UserRole[]).includes(role as UserRole)) throw new HttpsError("permission-denied", "Expert verification authority is required.");
+  if (!( ["EXPERT", "VALIDATOR", "DATA_STEWARD", "ADMIN", "SUPER_ADMIN"] as UserRole[]).includes(role as UserRole)) throw new HttpsError("permission-denied", "Expert verification authority is required.");
   const ref = db.collection(collection).doc(recordId);
   const actorUid = request.auth.uid;
   await db.runTransaction(async (tx) => {
