@@ -11,61 +11,65 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.tasks.await
 import java.io.File
 
-/** Cloud mirror. Writes require a real, verified Firebase account; no anonymous fallback. */
+/** Cloud mirror. Every operation completes only after Firebase has acknowledged the write. */
 class FirebaseSyncService(
     private val auth: FirebaseAuth = FirebaseAuth.getInstance(),
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance(),
     private val storage: FirebaseStorage = FirebaseStorage.getInstance()
 ) {
-    private fun withAuthenticatedUser(action: (String) -> Unit) {
-        val user = auth.currentUser
-            ?: throw IllegalStateException("A signed-in Firebase account is required for cloud sync.")
+    private fun authenticatedUid(): String {
+        val user = auth.currentUser ?: throw IllegalStateException("A signed-in Firebase account is required for cloud sync.")
         require(user.isEmailVerified) { "Verify your email before syncing dataset records." }
-        action(user.uid)
+        return user.uid
     }
 
-    fun syncLexicon(entry: LexiconEntry) = withAuthenticatedUser { uid ->
-        firestore.collection("lexicon").document(entry.id).set(entry.toMap(uid), SetOptions.merge())
+    suspend fun syncLexicon(entry: LexiconEntry) {
+        val uid = authenticatedUid()
+        firestore.collection("lexicon").document(entry.id).set(entry.toMap(uid), SetOptions.merge()).await()
     }
 
-    fun syncSentence(entry: SentenceEntry) = withAuthenticatedUser { uid ->
-        firestore.collection("sentences").document(entry.id).set(entry.toMap(uid), SetOptions.merge())
+    suspend fun syncSentence(entry: SentenceEntry) {
+        val uid = authenticatedUid()
+        firestore.collection("sentences").document(entry.id).set(entry.toMap(uid), SetOptions.merge()).await()
     }
 
-    fun syncSpeech(entry: SpeechRecording) = withAuthenticatedUser { uid ->
+    suspend fun syncSpeech(entry: SpeechRecording) {
+        val uid = authenticatedUid()
         val uri = entry.audioFilePath.takeIf { it.isNotBlank() }?.let { source -> runCatching {
             if (source.startsWith("content://") || source.startsWith("file://")) Uri.parse(source) else Uri.fromFile(File(source))
         }.getOrNull() }
-        if (uri == null) {
-            firestore.collection("speech").document(entry.id).set(entry.toMap(uid, null), SetOptions.merge())
-        } else {
-            storage.reference.child("speech/$uid/${entry.id}.audio").putFile(uri)
-                .continueWithTask { it.result.storage.downloadUrl }
-                .addOnSuccessListener { url -> firestore.collection("speech").document(entry.id).set(entry.toMap(uid, url.toString()), SetOptions.merge()) }
+        val cloudUrl = if (uri == null) null else {
+            val ref = storage.reference.child("speech/$uid/${entry.id}.audio")
+            ref.putFile(uri).await()
+            ref.downloadUrl.await().toString()
         }
+        firestore.collection("speech").document(entry.id).set(entry.toMap(uid, cloudUrl), SetOptions.merge()).await()
     }
 
-    fun syncStory(entry: StoryEntry) = withAuthenticatedUser { uid ->
-        firestore.collection("stories").document(entry.id).set(entry.toMap(uid), SetOptions.merge())
+    suspend fun syncStory(entry: StoryEntry) {
+        val uid = authenticatedUid()
+        firestore.collection("stories").document(entry.id).set(entry.toMap(uid), SetOptions.merge()).await()
     }
 
-    fun syncKnowledge(entry: KnowledgeEntry) = withAuthenticatedUser { uid ->
-        firestore.collection("knowledge").document(entry.id).set(entry.toMap(uid), SetOptions.merge())
+    suspend fun syncKnowledge(entry: KnowledgeEntry) {
+        val uid = authenticatedUid()
+        firestore.collection("knowledge").document(entry.id).set(entry.toMap(uid), SetOptions.merge()).await()
     }
 
-    fun syncImage(entry: ImageEntry) = withAuthenticatedUser { uid ->
+    suspend fun syncImage(entry: ImageEntry) {
+        val uid = authenticatedUid()
         val uri = entry.localUri.takeIf { it.isNotBlank() }?.let { source -> runCatching {
             if (source.startsWith("content://") || source.startsWith("file://")) Uri.parse(source) else Uri.fromFile(File(source))
         }.getOrNull() }
-        if (uri == null) {
-            firestore.collection("images").document(entry.id).set(entry.toMap(uid, null), SetOptions.merge())
-        } else {
-            storage.reference.child("images/$uid/${entry.id}").putFile(uri)
-                .continueWithTask { it.result.storage.downloadUrl }
-                .addOnSuccessListener { url -> firestore.collection("images").document(entry.id).set(entry.toMap(uid, url.toString()), SetOptions.merge()) }
+        val cloudUrl = if (uri == null) null else {
+            val ref = storage.reference.child("images/$uid/${entry.id}")
+            ref.putFile(uri).await()
+            ref.downloadUrl.await().toString()
         }
+        firestore.collection("images").document(entry.id).set(entry.toMap(uid, cloudUrl), SetOptions.merge()).await()
     }
 
     private fun LexiconEntry.toMap(ownerUid: String) = mapOf("ownerUid" to ownerUid, "id" to id, "khowarWord" to khowarWord, "normalizedKhowarWord" to normalizedKhowarWord, "transliteration" to transliteration, "englishMeaning" to englishMeaning, "urduMeaning" to urduMeaning, "partOfSpeech" to partOfSpeech.name, "grammaticalCategory" to grammaticalCategory, "definition" to definition, "pronunciation" to pronunciation, "exampleSentenceKhowar" to exampleSentenceKhowar, "exampleSentenceEnglish" to exampleSentenceEnglish, "dialectId" to dialectId, "regionId" to regionId, "source" to source, "contributorId" to contributorId, "contributorName" to contributorName, "status" to status.name, "licenseId" to licenseId, "isAiAssisted" to isAiAssisted, "aiModelUsed" to aiModelUsed, "createdAt" to createdAt, "updatedAt" to updatedAt, "publishedAt" to publishedAt)
