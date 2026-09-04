@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                                 AppScreen.HOME -> HomeScreen(viewModel = viewModel)
                                 AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
                                 AppScreen.CONTRIBUTE -> ContributorHubScreen(viewModel = viewModel)
-                                AppScreen.VALIDATE -> ValidateScreen(viewModel = viewModel)
+                                AppScreen.VALIDATE -> ValidatorWorkflowScreen(viewModel = viewModel)
                                 AppScreen.STATS -> StatsScreen(viewModel = viewModel)
                                 AppScreen.RESEARCH -> ResearcherScreen(viewModel = viewModel)
                                 AppScreen.ADMIN -> AdminScreen(viewModel = viewModel)
