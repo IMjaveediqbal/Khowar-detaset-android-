@@ -3,12 +3,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
+    function role() { return signedIn() && request.auth.token.role != null ? request.auth.token.role : ''; }
+    function hasRole(r) { return role() == r; }
+    function isAnyRole(roles) { return signedIn() && role() in roles; }
+    function isAdmin() { return isAnyRole(['ADMIN', 'SUPER_ADMIN']); }
+    function isModerator() { return isAnyRole(['MODERATOR', 'ADMIN', 'SUPER_ADMIN']); }
+    function isValidator() { return isAnyRole(['VALIDATOR', 'EXPERT', 'ADMIN', 'SUPER_ADMIN']); }
     function own(data) { return signedIn() && data.ownerUid == request.auth.uid; }
+    function isDatasetCollection(c) { return c in ['lexicon', 'sentences', 'speech', 'stories', 'knowledge', 'images']; }
 
-    // Public dataset records: readable only after trusted validation.
+    // Dataset records. Privileged lifecycle/status changes are backend-only.
     match /{collection}/{recordId} {
-      allow read: if resource.data.status == 'APPROVED';
-      allow create: if signedIn()
+      allow read: if isDatasetCollection(collection) && resource.data.status == 'APPROVED';
+      allow create: if isDatasetCollection(collection)
+                    && signedIn()
                     && request.resource.data.ownerUid == request.auth.uid
                     && request.resource.data.status == 'SUBMITTED'
                     && request.resource.data.contributorId is string
@@ -16,7 +24,36 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Community: public reading, profile/authentication required for participation.
+    // User profiles. Role is trusted only when written by Cloud Functions/Admin SDK.
+    match /users/{userId} {
+      allow read: if signedIn() && (userId == request.auth.uid || isAdmin());
+      allow create: if signedIn() && userId == request.auth.uid
+                    && request.resource.data.role == 'CONTRIBUTOR';
+      allow update: if signedIn() && userId == request.auth.uid
+                    && request.resource.data.role == resource.data.role;
+      allow delete: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /validation_reviews/{reviewId} {
+      allow read: if signedIn() && (resource.data.validatorId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    match /moderationReports/{reportId} {
+      allow read: if signedIn() && (resource.data.reporterId == request.auth.uid || isModerator());
+      allow create: if signedIn()
+                    && request.resource.data.reporterId == request.auth.uid
+                    && request.resource.data.status == 'PENDING';
+      allow update: if isModerator();
+      allow delete: if false;
+    }
+
+    // Community: public reading, authentication required for participation.
     match /communityPosts/{postId} {
       allow read: if true;
       allow create: if signedIn()
@@ -29,13 +66,12 @@ service cloud.firestore {
                     && request.resource.data.solved == false
                     && request.resource.data.answerCount == 0
                     && request.resource.data.voteScore == 0;
-      // Authors may resolve their own thread, but counters/content are backend-controlled.
       allow update: if own(resource.data)
                     && request.resource.data.ownerUid == resource.data.ownerUid
                     && request.resource.data.authorProfileId == resource.data.authorProfileId
                     && request.resource.data.authorName == resource.data.authorName
                     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['solved', 'updatedAt']);
-      allow delete: if own(resource.data);
+      allow delete: if own(resource.data) || isModerator();
 
       match /comments/{commentId} {
         allow read: if true;
@@ -45,10 +81,9 @@ service cloud.firestore {
                       && request.resource.data.authorName is string
                       && request.resource.data.body is string
                       && request.resource.data.accepted == false;
-        allow update, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+        allow update, delete: if signedIn() && (resource.data.ownerUid == request.auth.uid || isModerator());
       }
 
-      // Voting is performed only by the trusted Cloud Function.
       match /votes/{userId} {
         allow read: if true;
         allow create, update, delete: if false;
