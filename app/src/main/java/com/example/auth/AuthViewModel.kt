@@ -48,6 +48,18 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    fun signInWithGoogleIdToken(idToken: String) {
+        if (idToken.isBlank()) {
+            _state.value = AuthState.Error("Google sign-in did not return a valid identity token.")
+            return
+        }
+        viewModelScope.launch {
+            _state.value = AuthState.Loading
+            runCatching { repository.signInWithGoogleIdToken(idToken) }
+                .onFailure { _state.value = AuthState.Error(firebaseMessage(it)) }
+        }
+    }
+
     fun resetPassword(email: String) {
         if (email.isBlank()) {
             _state.value = AuthState.Error("Enter your email address first.")
@@ -56,7 +68,7 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = AuthState.Loading
             runCatching { repository.sendPasswordReset(email) }
-                .onSuccess { _state.value = AuthState.Error("Password reset email sent.") }
+                .onSuccess { _state.value = AuthState.Error("Password reset email sent. Check your inbox.") }
                 .onFailure { _state.value = AuthState.Error(firebaseMessage(it)) }
         }
     }
@@ -68,6 +80,7 @@ class AuthViewModel : ViewModel() {
         t.message?.contains("no user record", ignoreCase = true) == true -> "No account exists for this email."
         t.message?.contains("email address is already in use", ignoreCase = true) == true -> "An account already exists for this email."
         t.message?.contains("badly formatted", ignoreCase = true) == true -> "Enter a valid email address."
+        t.message?.contains("network", ignoreCase = true) == true -> "Network error. Check your connection and try again."
         else -> t.message ?: "Authentication failed. Please try again."
     }
 
