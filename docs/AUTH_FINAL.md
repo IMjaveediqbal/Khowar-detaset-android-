@@ -1,0 +1,1 @@
+Authentication implementation is isolated on the feature branch. Main remains unchanged until build verification and Firebase configuration are confirmed.
