@@ -1,0 +1,1 @@
+This feature branch is ready for review after Firebase project configuration and Android build verification.
