@@ -1,0 +1,1 @@
+Review focus: Firebase Auth providers, Firebase UID profile identity, AuthGate startup behavior, trusted RBAC refresh, and preservation of offline contribution workflows.
