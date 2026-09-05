@@ -1,0 +1,1 @@
+Provisional authentication files on this branch are intentionally not part of the production merge until the composition root and Google provider configuration are reconciled.
