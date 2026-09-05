@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -25,7 +26,8 @@ import kotlinx.coroutines.Dispatchers
 fun AuthGate(content: @Composable () -> Unit) {
     val authViewModel: AuthViewModel = viewModel()
     val khowarViewModel: KhowarViewModel = viewModel()
-    val state by authViewModel.state.collectAsStateCompat()
+    val state by authViewModel.state.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
     var profileReady by remember { mutableStateOf(false) }
 
     when (val current = state) {
@@ -36,10 +38,7 @@ fun AuthGate(content: @Composable () -> Unit) {
         is AuthState.SignedIn -> {
             LaunchedEffect(current.user.uid) {
                 profileReady = false
-                val profile = FirebaseProfileBootstrap.ensure(
-                    context = getApplicationContextCompat(),
-                    firebaseUser = current.user
-                )
+                val profile = FirebaseProfileBootstrap.ensure(context, current.user)
                 khowarViewModel.repository.setCurrentUser(profile)
                 khowarViewModel.refreshTrustedRole()
                 profileReady = true
@@ -52,19 +51,11 @@ fun AuthGate(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun getApplicationContextCompat(): Context =
-    androidx.compose.ui.platform.LocalContext.current.applicationContext
-
-@Composable
 private fun AuthLoadingScreen() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         CircularProgressIndicator()
     }
 }
-
-@Composable
-private fun AuthViewModel.collectAsStateCompat() =
-    kotlinx.coroutines.flow.collectAsState(state)
 
 private object FirebaseProfileBootstrap {
     suspend fun ensure(context: Context, firebaseUser: FirebaseUser): User {
