@@ -1,0 +1,8 @@
+- Added Firebase email/password authentication.
+- Added Google Credential Manager sign-in.
+- Added password reset and sign-out.
+- Added an authentication gate around the application.
+- Bootstrapped authenticated Room profiles with Firebase UID.
+- Refreshed trusted server RBAC after profile initialization.
+- Kept privileged roles server-assigned.
+- Added authentication setup and test documentation.
