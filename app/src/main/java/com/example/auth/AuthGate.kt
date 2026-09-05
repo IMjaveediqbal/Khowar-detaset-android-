@@ -40,8 +40,7 @@ fun AuthGate(content: @Composable () -> Unit) {
                     context = getApplicationContextCompat(),
                     firebaseUser = current.user
                 )
-                khowarViewModel.repository.currentUser
-                khowarViewModel.setCurrentUserForAuth(profile)
+                khowarViewModel.repository.setCurrentUser(profile)
                 khowarViewModel.refreshTrustedRole()
                 profileReady = true
             }
