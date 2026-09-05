@@ -1,0 +1,1 @@
+Authentication feature branch status: implemented and awaiting CI/build verification before merge to main.
