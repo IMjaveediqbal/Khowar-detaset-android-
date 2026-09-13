@@ -4,7 +4,7 @@ Android app for community contributions of Khowar words, sentences, speech, stor
 
 ## Development
 
-1. Install JDK 17, Android SDK Platform 36 and Build Tools 36.0.0. Set `ANDROID_HOME` or `sdk.dir` in untracked `local.properties`.
+1. Install JDK 21 (required for Robolectric tests targeting Android 16), Android SDK Platform 36 and Build Tools 36.0.0. Set `ANDROID_HOME` or `sdk.dir` in untracked `local.properties`.
 2. Run `./gradlew testDebugUnitTest lintDebug compileReleaseKotlin assembleDebug`.
 3. Firebase is optional for launching the offline shell. To use connected features, register the application ID from `app/build.gradle.kts` in Firebase and download `app/google-services.json`. This file is ignored by Git.
 4. Enable Email/Password and Anonymous Authentication. Anonymous accounts browse approved records; contributions require an email/password account. Creating an account while browsing anonymously links that identity. App Check debug builds require a registered debug token; release builds use Play Integrity.

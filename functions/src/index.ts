@@ -14,6 +14,12 @@ const uidOf = (request: { auth?: { uid: string } }) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in first.");
   return request.auth.uid;
 };
+async function memberUid(request: { auth?: { uid: string } }): Promise<string> {
+  const uid = uidOf(request);
+  const account = await auth.getUser(uid);
+  if (account.disabled || !account.email) throw new HttpsError("permission-denied", "Sign in with a registered account to contribute.");
+  return uid;
+}
 // Read current server-owned role, rather than stale claims after demotion.
 async function roleOf(uid: string): Promise<Role> {
   const user = await auth.getUser(uid);
@@ -77,7 +83,8 @@ export const setUserRole = onCall(options, async request => {
   return { ok: true, role: next };
 });
 export const submitDataset = onCall(options, async request => {
-  const uid = uidOf(request);
+  const uid = await memberUid(request);
+  await requireRole(uid, ["CONTRIBUTOR", "VALIDATOR", "ADMIN", "SUPER_ADMIN"]);
   const ref = recordRef(request.data);
   const input = request.data?.record as Record<string, unknown>;
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpsError('invalid-argument', 'Record required.');
@@ -201,14 +208,14 @@ export const withdrawConsent = onCall(options, async request => {
   return {ok:true,remaining:docs.size === 100};
 });
 export const reportDataset = onCall(options, async request => {
-  const uid=uidOf(request); const ref=recordRef(request.data);
+  const uid=await memberUid(request); const ref=recordRef(request.data);
   const reason=String(request.data?.description??'').trim();
   if(reason.length<5||reason.length>4000) throw new HttpsError('invalid-argument','Report requires 5–4000 characters.');
   await db.runTransaction(async tx=>{const doc=await tx.get(ref);if(!doc.exists)throw new HttpsError('not-found','Record not found.');tx.update(ref,{moderationOpen:true,updatedAt:Date.now()});tx.set(db.collection('moderationReports').doc(),{reporterId:uid,collection:ref.parent.id,recordId:ref.id,reason,status:'PENDING',createdAt:Date.now()});});
   return {ok:true};
 });
 export const addCommunityComment = onCall(options, async request => {
-  const uid=uidOf(request); const postId=String(request.data?.postId??''); const body=String(request.data?.body??'').trim(); const commentId=String(request.data?.commentId??'');
+  const uid=await memberUid(request); const postId=String(request.data?.postId??''); const body=String(request.data?.body??'').trim(); const commentId=String(request.data?.commentId??'');
   if(!/^[\w-]{1,128}$/.test(postId)||!/^[\w-]{1,128}$/.test(commentId)||body.length<2||body.length>3000)throw new HttpsError('invalid-argument','Invalid comment.');
   const post=db.collection('communityPosts').doc(postId); const ref=post.collection('comments').doc(commentId);
   const profile=await db.collection('users').doc(uid).get();
@@ -216,7 +223,7 @@ export const addCommunityComment = onCall(options, async request => {
   return {id:ref.id};
 });
 export const voteOnCommunityPost = onCall(options, async request => {
-  const uid=uidOf(request);const postId=String(request.data?.postId??'');if(!/^[\w-]{1,128}$/.test(postId))throw new HttpsError('invalid-argument','Invalid post.');
+  const uid=await memberUid(request);const postId=String(request.data?.postId??'');if(!/^[\w-]{1,128}$/.test(postId))throw new HttpsError('invalid-argument','Invalid post.');
   const post=db.collection('communityPosts').doc(postId);const vote=post.collection('votes').doc(uid);
   await db.runTransaction(async tx=>{const p=await tx.get(post);const v=await tx.get(vote);if(!p.exists)throw new HttpsError('not-found','Post not found.');if(v.exists)tx.delete(vote);else tx.create(vote,{createdAt:Date.now()});tx.update(post,{voteScore:Math.max(0,Number(p.data()?.voteScore??0)+(v.exists?-1:1)),updatedAt:Date.now()});});return {ok:true};
 });

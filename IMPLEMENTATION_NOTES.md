@@ -26,8 +26,10 @@ This change does not supply a trained Khowar AI, a production HTTP research API,
 
 ## Validation
 
-GitHub Actions run 34763680478 passed the TypeScript build, 3 policy tests and all 9 Firebase emulator integration tests. Android compilation and final CI verification are pending; consult the pull request checks before merging.
+GitHub Actions run 34763680478 passed the TypeScript build, 3 policy tests and all 9 Firebase emulator integration tests. Run 34763873113 compiled both debug and release Kotlin and passed 13 Android tests; two Robolectric tests exposed a Java 21 runtime requirement. CI and development instructions now use JDK 21, the obsolete application-name assertion is corrected, and final CI verification remains tracked by the pull request checks.
 
 ## Concurrent main-branch changes
 
 Integrated main through 361e577. Preserved its duplicate-RBAC removal and transliteration hint helper, corrected the helper's ASCII condition, and kept hints opt-in rather than silently inserting them into saved records. CI uses the restored Gradle 9.3.1 wrapper required by the existing Android plugin instead of main's temporary Gradle 8.13 workaround; release compilation does not require an owner's signing key.
+
+Anonymous browsing identities are rejected by server submission/comment operations, and contribution role permissions are enforced on the server. A regression test covers this boundary.

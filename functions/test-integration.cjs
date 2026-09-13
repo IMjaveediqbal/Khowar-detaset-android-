@@ -78,3 +78,9 @@ test('profile updates preserve the protected server role',async()=>{
  assert.equal(result.role,'EXPERT');
  assert.equal((await db.doc('users/expert').get()).data().role,'EXPERT');
 });
+
+test('anonymous browsing accounts cannot submit records or community replies',async()=>{
+ await auth.createUser({uid:'anonymous'});
+ await assert.rejects(call('submitDataset','anonymous',{collection:'lexicon',recordId:'anonymous-word',record:word,consent:true,consentVersion:'1.0'}));
+ await assert.rejects(call('addCommunityComment','anonymous',{postId:'post',commentId:'anonymous-comment',body:'A reply'}));
+});
