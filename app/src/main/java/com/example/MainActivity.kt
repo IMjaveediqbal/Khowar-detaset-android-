@@ -16,6 +16,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.security.RbacPolicy
+import com.example.security.RbacPermission
 import com.example.community.CommunityScreen
 import com.example.community.CommunityUiState
 import com.example.ui.components.AppHeader
@@ -60,7 +62,10 @@ class MainActivity : ComponentActivity() {
             val sentenceQueue by viewModel.sentenceQueue.collectAsState()
             val speechQueue by viewModel.speechQueue.collectAsState()
             val storyQueue by viewModel.storyQueue.collectAsState()
-            val totalQueueCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size
+            val knowledgeQueue by viewModel.knowledgeQueue.collectAsState()
+            val imageQueue by viewModel.imageQueue.collectAsState()
+            val totalQueueCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size + knowledgeQueue.size + imageQueue.size
+            val formState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
             val role = currentUser?.role
             val snackbarHostState = remember { SnackbarHostState() }
             val coroutineScope = rememberCoroutineScope()
@@ -85,6 +90,7 @@ class MainActivity : ComponentActivity() {
                 else coroutineScope.launch { snackbarHostState.showSnackbar("Your role does not have access to this workspace.") }
             }
 
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides if (currentLanguage.isRtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
             KhowarDatasetTheme(darkTheme = isDark) {
                 Box(Modifier.fillMaxSize()) {
                     Scaffold(
@@ -102,8 +108,8 @@ class MainActivity : ComponentActivity() {
                             when (screen) {
                                 AppScreen.HOME -> HomeScreen(viewModel = viewModel)
                                 AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
-                                AppScreen.CONTRIBUTE -> ContributorHubScreen(viewModel = viewModel)
-                                AppScreen.VALIDATE -> if (RbacPolicy.can(role, RbacPermission.VALIDATE_COMMUNITY)) ValidatorWorkflowScreen(viewModel = viewModel) else RbacDeniedScreen("Validation restricted", "A Validator, Expert, Admin or Super Admin role is required.")
+                                AppScreen.CONTRIBUTE -> formState.SaveableStateProvider("contribute-${currentUser?.id}") { ContributorHubScreen(viewModel = viewModel) }
+                                AppScreen.VALIDATE -> if (RbacPolicy.can(role, RbacPermission.VALIDATE_COMMUNITY)) ValidateScreen(viewModel = viewModel) else RbacDeniedScreen("Validation restricted", "A Validator, Expert, Admin or Super Admin role is required.")
                                 AppScreen.STATS -> StatsScreen(viewModel = viewModel)
                                 AppScreen.RESEARCH -> if (RbacPolicy.can(role, RbacPermission.ACCESS_RESEARCH_HUB)) ResearcherScreen(viewModel = viewModel) else RbacDeniedScreen("Research workspace restricted", "Researcher, Expert, Admin or Super Admin access is required.")
                                 AppScreen.ADMIN -> if (RbacPolicy.can(role, RbacPermission.MANAGE_USERS)) AdminScreen(viewModel = viewModel) else RbacDeniedScreen("Administration restricted", "Administrator privileges are required.")
@@ -116,6 +122,7 @@ class MainActivity : ComponentActivity() {
                         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { CommunityScreen(viewModel = viewModel) }
                     }
                 }
+            }
             }
         }
     }

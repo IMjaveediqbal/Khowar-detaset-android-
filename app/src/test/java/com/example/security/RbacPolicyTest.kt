@@ -13,7 +13,7 @@ class RbacPolicyTest {
 
     @Test fun validatorCanValidateButNotRelease() {
         assertTrue(RbacPolicy.can(UserRole.VALIDATOR, RbacPermission.VALIDATE_COMMUNITY))
-        assertTrue(RbacPolicy.can(UserRole.VALIDATOR, RbacPermission.VERIFY_EXPERT))
+        assertFalse(RbacPolicy.can(UserRole.VALIDATOR, RbacPermission.VERIFY_EXPERT))
         assertFalse(RbacPolicy.can(UserRole.VALIDATOR, RbacPermission.RELEASE_DATASET))
     }
 

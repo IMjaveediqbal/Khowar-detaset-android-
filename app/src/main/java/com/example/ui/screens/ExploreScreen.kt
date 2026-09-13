@@ -48,6 +48,7 @@ fun ExploreScreen(
     val sentences by viewModel.approvedSentences.collectAsState()
     val speech by viewModel.approvedSpeech.collectAsState()
     val stories by viewModel.approvedStories.collectAsState()
+    val images by viewModel.approvedImages.collectAsState()
     val knowledge by viewModel.approvedKnowledge.collectAsState()
 
     var selectedRecordDetails by remember { mutableStateOf<Any?>(null) }
@@ -63,8 +64,8 @@ fun ExploreScreen(
             (selectedDialect == "All" || w.dialectId.equals(selectedDialect, ignoreCase = true)) &&
             (normQuery.isEmpty() ||
              w.normalizedKhowarWord.contains(normQuery) ||
-             w.transliteration.lowercase().contains(latinQuery) ||
-             w.englishMeaning.lowercase().contains(latinQuery) ||
+             (latinQuery.isNotEmpty() && w.transliteration.lowercase().contains(latinQuery)) ||
+             (latinQuery.isNotEmpty() && w.englishMeaning.lowercase().contains(latinQuery)) ||
              w.urduMeaning.contains(searchQuery))
         }
     }
@@ -74,8 +75,8 @@ fun ExploreScreen(
             (selectedDialect == "All" || s.dialectId.equals(selectedDialect, ignoreCase = true)) &&
             (normQuery.isEmpty() ||
              s.normalizedText.contains(normQuery) ||
-             s.transliteration.lowercase().contains(latinQuery) ||
-             s.englishTranslation.lowercase().contains(latinQuery) ||
+             (latinQuery.isNotEmpty() && s.transliteration.lowercase().contains(latinQuery)) ||
+             (latinQuery.isNotEmpty() && s.englishTranslation.lowercase().contains(latinQuery)) ||
              s.urduTranslation.contains(searchQuery))
         }
     }
@@ -85,8 +86,8 @@ fun ExploreScreen(
             (selectedDialect == "All" || sp.dialectId.equals(selectedDialect, ignoreCase = true)) &&
             (normQuery.isEmpty() ||
              sp.normalizedTranscript.contains(normQuery) ||
-             sp.transliteration.lowercase().contains(latinQuery) ||
-             sp.englishTranslation.lowercase().contains(latinQuery))
+             (latinQuery.isNotEmpty() && sp.transliteration.lowercase().contains(latinQuery)) ||
+             (latinQuery.isNotEmpty() && sp.englishTranslation.lowercase().contains(latinQuery)))
         }
     }
 
@@ -94,9 +95,9 @@ fun ExploreScreen(
         stories.filter { st ->
             (selectedDialect == "All" || st.dialectId.equals(selectedDialect, ignoreCase = true)) &&
             (normQuery.isEmpty() ||
-             st.title.lowercase().contains(latinQuery) ||
+             (latinQuery.isNotEmpty() && st.title.lowercase().contains(latinQuery)) ||
              st.khowarText.contains(searchQuery) ||
-             st.englishTranslation.lowercase().contains(latinQuery))
+             (latinQuery.isNotEmpty() && st.englishTranslation.lowercase().contains(latinQuery)))
         }
     }
 
@@ -104,13 +105,14 @@ fun ExploreScreen(
         knowledge.filter { k ->
             (selectedDialect == "All" || k.dialectId.equals(selectedDialect, ignoreCase = true)) &&
             (normQuery.isEmpty() ||
-             k.title.lowercase().contains(latinQuery) ||
+             (latinQuery.isNotEmpty() && k.title.lowercase().contains(latinQuery)) ||
              k.khowarContent.contains(searchQuery) ||
-             k.englishContent.lowercase().contains(latinQuery))
+             (latinQuery.isNotEmpty() && k.englishContent.lowercase().contains(latinQuery)))
         }
     }
 
-    val totalRecords = filteredWords.size + filteredSentences.size + filteredSpeech.size + filteredStories.size + filteredKnowledge.size
+    val filteredImages = images.filter { image -> searchQuery.isBlank() || image.khowarLabel.contains(searchQuery) || (latinQuery.isNotEmpty() && image.englishLabel.lowercase().contains(latinQuery)) }
+    val totalRecords = filteredWords.size + filteredSentences.size + filteredSpeech.size + filteredStories.size + filteredKnowledge.size + filteredImages.size
 
     Column(modifier = modifier.fillMaxSize()) {
         // Search & Filters Header
@@ -185,7 +187,7 @@ fun ExploreScreen(
                                     ExploreTab.SPEECH -> filteredSpeech.size
                                     ExploreTab.STORIES -> filteredStories.size
                                     ExploreTab.KNOWLEDGE -> filteredKnowledge.size
-                                    ExploreTab.IMAGES -> 0
+                                    ExploreTab.IMAGES -> filteredImages.size
                                 }
                                 Text("${tab.name} ($count)", fontSize = 12.sp, fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.Normal)
                             }
@@ -196,6 +198,7 @@ fun ExploreScreen(
         }
 
         // List Content
+        TextButton(onClick={viewModel.loadMoreRecords()}) { Text("Load more matching records") }
         if (totalRecords == 0) {
             EmptyStateView(
                 title = Strings.get("empty_no_verified", lang),
@@ -213,6 +216,9 @@ fun ExploreScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Lexicon entries
+                if(currentTab == ExploreTab.ALL || currentTab == ExploreTab.IMAGES) {
+                    items(filteredImages,key={it.id}) { image -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) { Text(image.title); Text(image.khowarLabel); Text(image.englishLabel); Text(image.culturalContext) } } }
+                }
                 if (currentTab == ExploreTab.ALL || currentTab == ExploreTab.WORDS) {
                     items(filteredWords) { word ->
                         LexiconItemCard(

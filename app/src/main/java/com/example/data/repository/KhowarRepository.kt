@@ -1,5 +1,13 @@
 package com.example.data.repository
 
+import com.example.data.SubmissionValidator
+import androidx.room.withTransaction
+import com.example.data.remote.DatasetCodec
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.functions.FirebaseFunctions
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.sync.withLock
+import com.example.data.remote.DatasetSyncWorker
 import com.example.data.KhowarNormalizer
 import com.example.data.local.AppDatabase
 import com.example.data.model.*
@@ -37,30 +45,26 @@ class KhowarRepository(private val database: AppDatabase) {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
-    /** Public signup can never grant a privileged role. */
-    suspend fun registerOrLoginUser(email: String, displayName: String, username: String, role: UserRole, region: String): User =
-        withContext(Dispatchers.IO) {
-            val existing = userDao.getUserByEmail(email.trim().lowercase())
-            if (existing != null) {
-                _currentUser.value = existing
-                existing
-            } else {
-                val newUser = User(
-                    id = UUID.randomUUID().toString(),
-                    email = email.trim().lowercase(),
-                    displayName = displayName.trim(),
-                    username = username.trim().ifEmpty { displayName.lowercase().replace(" ", "_") },
-                    role = UserRole.CONTRIBUTOR,
-                    region = region,
-                    preferredLanguage = "en",
-                    createdAt = System.currentTimeMillis()
-                )
-                userDao.insert(newUser)
-                _currentUser.value = newUser
-                logAudit(newUser.id, newUser.displayName, "USER_REGISTER", "USER", newUser.id, "Registered as CONTRIBUTOR")
-                newUser
-            }
-        }
+    suspend fun registerOrLoginUser(email: String, displayName: String, username: String, role: UserRole, region: String): User = withContext(Dispatchers.IO) {
+        val account = FirebaseAuth.getInstance().currentUser ?: error("Sign in first.")
+        require(!account.isAnonymous) { "Use a verified sign-in method before contributing." }
+        val result = FirebaseFunctions.getInstance().getHttpsCallable("saveProfile").call(mapOf("displayName" to displayName, "username" to username, "region" to region)).await().data as Map<*, *>
+        val user = User(id = account.uid, email = account.email.orEmpty(), displayName = displayName.trim(), username = username.trim(), region = region, role = UserRole.valueOf(result["role"].toString()))
+        userDao.insert(user)
+        _currentUser.value = user
+        user
+    }
+
+    private suspend fun enqueue(collection: String, id: String, record: Any, uid: String) {
+        val authUid = FirebaseAuth.getInstance().currentUser?.uid
+        require(authUid == uid) { "Account changed; sign in again." }
+        database.cloudDao().put(CloudOperation("$collection/$id", collection, id, uid, DatasetCodec.encode(record)))
+    }
+
+    suspend fun purgeOtherPrivate(uid: String) = database.withTransaction {
+        lexiconDao.purgeOtherPrivate(uid); sentenceDao.purgeOtherPrivate(uid); speechDao.purgeOtherPrivate(uid)
+        storyDao.purgeOtherPrivate(uid); knowledgeDao.purgeOtherPrivate(uid); imageDao.purgeOtherPrivate(uid)
+    }
 
     fun setCurrentUser(user: User?) { _currentUser.value = user }
 
@@ -68,7 +72,7 @@ class KhowarRepository(private val database: AppDatabase) {
         lexiconDao.countApproved(), sentenceDao.countApproved(), speechDao.countApproved(),
         speechDao.totalApprovedDurationSeconds(), storyDao.countApproved(), knowledgeDao.countApproved(),
         imageDao.countApproved(), userDao.countActiveContributors(), lexiconDao.getReviewQueue(),
-        sentenceDao.getReviewQueue(), speechDao.getReviewQueue()
+        sentenceDao.getReviewQueue(), speechDao.getReviewQueue(), storyDao.getReviewQueue(), knowledgeDao.getReviewQueue(), imageDao.getReviewQueue()
     ) { args: Array<Any?> ->
         val wordCount = args[0] as? Int ?: 0
         val sentenceCount = args[1] as? Int ?: 0
@@ -86,7 +90,7 @@ class KhowarRepository(private val database: AppDatabase) {
             totalSpeechHours = durationSeconds / 3600.0, totalStories = stories, totalKnowledge = knowledge,
             totalImages = images, totalContributors = contributors,
             totalApprovedRecords = wordCount + sentenceCount + speechCount + stories + knowledge + images,
-            pendingReviewCount = pendingLexicon + pendingSentences + pendingSpeech
+            pendingReviewCount = pendingLexicon + pendingSentences + pendingSpeech + (args[11] as? List<*>) .orEmpty().size + (args[12] as? List<*>).orEmpty().size + (args[13] as? List<*>).orEmpty().size
         )
     }.flowOn(Dispatchers.IO)
 
@@ -133,10 +137,9 @@ class KhowarRepository(private val database: AppDatabase) {
         exampleKhowar: String, exampleEnglish: String, dialectId: String, regionId: String, source: String,
         licenseId: String, isAiAssisted: Boolean, aiModel: String): Result<String> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in or select a contributor profile first."))
+        SubmissionValidator.validateWord(khowarWord, englishMeaning, urduMeaning, source).getOrThrow()
         val normalized = KhowarNormalizer.normalizeKhowarText(khowarWord)
         if (normalized.isBlank()) return@withContext Result.failure(Exception("Khowar word cannot be empty."))
-        val duplicate = lexiconDao.findDuplicates(normalized).any { it.status != RecordStatus.ARCHIVED }
-        if (duplicate) return@withContext Result.failure(Exception("A lexicon entry with this normalized form already exists."))
         val entry = LexiconEntry(
             khowarWord = khowarWord.trim(), normalizedKhowarWord = normalized,
             transliteration = transliteration.trim().ifEmpty { KhowarNormalizer.generateTransliterationHint(khowarWord) },
@@ -146,20 +149,21 @@ class KhowarRepository(private val database: AppDatabase) {
             regionId = regionId, source = source.trim(), contributorId = user.id, contributorName = user.displayName,
             status = RecordStatus.SUBMITTED, licenseId = licenseId, isAiAssisted = isAiAssisted, aiModelUsed = aiModel.trim()
         )
+        database.withTransaction {
         lexiconDao.insert(entry)
         recordConsent(user.id, "LEXICON", entry.id, "DATASET_PUBLICATION_CC_BY_SA")
         logAudit(user.id, user.displayName, "SUBMIT_WORD", "LEXICON", entry.id, "Submitted word '${entry.khowarWord}'")
+            enqueue("lexicon", entry.id, entry, user.id)
+        }
         Result.success(entry.id)
     }
 
     suspend fun submitSentence(khowarText: String, transliteration: String, englishTranslation: String, urduTranslation: String,
         context: String, dialectId: String, regionId: String, source: String, licenseId: String): Result<String> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in first."))
+        SubmissionValidator.validateSentence(khowarText, englishTranslation, urduTranslation, source).getOrThrow()
         val normalized = KhowarNormalizer.normalizeKhowarText(khowarText)
         if (normalized.isBlank()) return@withContext Result.failure(Exception("Sentence cannot be empty."))
-        if (sentenceDao.findDuplicates(normalized).any { it.status != RecordStatus.ARCHIVED }) {
-            return@withContext Result.failure(Exception("A sentence with this normalized form already exists."))
-        }
         val entry = SentenceEntry(
             khowarText = khowarText.trim(), normalizedText = normalized,
             transliteration = transliteration.trim().ifEmpty { KhowarNormalizer.generateTransliterationHint(khowarText) },
@@ -167,9 +171,12 @@ class KhowarRepository(private val database: AppDatabase) {
             dialectId = dialectId, regionId = regionId, source = source.trim(), contributorId = user.id,
             contributorName = user.displayName, status = RecordStatus.SUBMITTED, licenseId = licenseId
         )
+        database.withTransaction {
         sentenceDao.insert(entry)
         recordConsent(user.id, "SENTENCE", entry.id, "DATASET_PUBLICATION_CC_BY_SA")
         logAudit(user.id, user.displayName, "SUBMIT_SENTENCE", "SENTENCE", entry.id, "Submitted sentence '${entry.khowarText.take(30)}...'")
+            enqueue("sentences", entry.id, entry, user.id)
+        }
         Result.success(entry.id)
     }
 
@@ -178,20 +185,25 @@ class KhowarRepository(private val database: AppDatabase) {
         urduTranslation: String, dialectId: String, regionId: String, recordingEnvironment: String,
         licenseId: String): Result<String> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in first."))
+        SubmissionValidator.validateSpeech(audioFilePath, durationSeconds, transcriptKhowar).getOrThrow()
+        require(java.io.File(audioFilePath).isFile) { "Recording file is missing." }
         if (durationSeconds <= 0.0) return@withContext Result.failure(Exception("Audio duration must be greater than zero."))
         if (transcriptKhowar.trim().isBlank()) return@withContext Result.failure(Exception("Speech transcript cannot be empty."))
         val norm = KhowarNormalizer.normalizeKhowarText(transcriptKhowar)
         val entry = SpeechRecording(
-            speakerPublicId = "SPK-${UUID.randomUUID().toString().take(8).uppercase()}", speakerAgeGroup = speakerAgeGroup.trim(),
+            speakerPublicId = "SPK-" + MessageDigest.getInstance("SHA-256").digest(user.id.toByteArray()).joinToString("") { "%02x".format(it) }.take(24), speakerAgeGroup = speakerAgeGroup.trim(),
             speakerGender = speakerGender.trim(), isNativeSpeaker = isNativeSpeaker, audioFilePath = audioFilePath,
             durationSeconds = durationSeconds, transcriptKhowar = transcriptKhowar.trim(), normalizedTranscript = norm,
             transliteration = transliteration.trim(), englishTranslation = englishTranslation.trim(), urduTranslation = urduTranslation.trim(),
             dialectId = dialectId, regionId = regionId, recordingEnvironment = recordingEnvironment.trim(),
             contributorId = user.id, contributorName = user.displayName, status = RecordStatus.SUBMITTED, licenseId = licenseId
         )
+        database.withTransaction {
         speechDao.insert(entry)
         recordConsent(user.id, "SPEECH", entry.id, "VOICE_RECORDING_CONSENT_CC_BY_SA")
         logAudit(user.id, user.displayName, "SUBMIT_SPEECH", "SPEECH", entry.id, "Submitted voice recording of $durationSeconds s")
+            enqueue("speech", entry.id, entry, user.id)
+        }
         Result.success(entry.id)
     }
 
@@ -199,13 +211,17 @@ class KhowarRepository(private val database: AppDatabase) {
         urduTranslation: String, category: StoryCategory, authorOrSpeaker: String, dialectId: String, regionId: String,
         source: String, licenseId: String): Result<String> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in first."))
+        require(title.isNotBlank() && khowarText.isNotBlank() && khowarText.length <= 100_000) { "Title and story text are required." }
         val entry = StoryEntry(title = title.trim(), khowarText = khowarText.trim(), transliteration = transliteration.trim(),
             englishTranslation = englishTranslation.trim(), urduTranslation = urduTranslation.trim(), category = category,
             authorOrSpeaker = authorOrSpeaker.trim(), dialectId = dialectId, regionId = regionId, source = source.trim(),
             contributorId = user.id, contributorName = user.displayName, status = RecordStatus.SUBMITTED, licenseId = licenseId)
+        database.withTransaction {
         storyDao.insert(entry)
         recordConsent(user.id, "STORY", entry.id, "DATASET_PUBLICATION_CC_BY_SA")
         logAudit(user.id, user.displayName, "SUBMIT_STORY", "STORY", entry.id, "Submitted story '$title'")
+            enqueue("stories", entry.id, entry, user.id)
+        }
         Result.success(entry.id)
     }
 
@@ -213,116 +229,77 @@ class KhowarRepository(private val database: AppDatabase) {
         englishContent: String, urduContent: String, explanation: String, source: String, dialectId: String,
         regionId: String, licenseId: String): Result<String> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in first."))
+        require(title.isNotBlank() && khowarContent.isNotBlank() && khowarContent.length <= 100_000) { "Title and Khowar content are required." }
         val entry = KnowledgeEntry(type = type, title = title.trim(), khowarContent = khowarContent.trim(), transliteration = transliteration.trim(),
             englishContent = englishContent.trim(), urduContent = urduContent.trim(), explanation = explanation.trim(),
             source = source.trim(), dialectId = dialectId, regionId = regionId, contributorId = user.id,
             contributorName = user.displayName, status = RecordStatus.SUBMITTED, licenseId = licenseId)
+        database.withTransaction {
         knowledgeDao.insert(entry)
         recordConsent(user.id, "KNOWLEDGE", entry.id, "DATASET_PUBLICATION_CC_BY_SA")
         logAudit(user.id, user.displayName, "SUBMIT_KNOWLEDGE", "KNOWLEDGE", entry.id, "Submitted knowledge item '$title'")
+            enqueue("knowledge", entry.id, entry, user.id)
+        }
         Result.success(entry.id)
     }
 
     suspend fun submitImage(title: String, description: String, khowarLabel: String, englishLabel: String, culturalContext: String,
         localUri: String, photographerOrSource: String, regionId: String, licenseId: String): Result<String> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in first."))
+        require(java.io.File(localUri).isFile) { "Select a real image first." }
         if (localUri.isBlank()) return@withContext Result.failure(Exception("Image URI cannot be empty."))
         val entry = ImageEntry(title = title.trim(), description = description.trim(), khowarLabel = khowarLabel.trim(),
             englishLabel = englishLabel.trim(), culturalContext = culturalContext.trim(), localUri = localUri,
             photographerOrSource = photographerOrSource.trim(), regionId = regionId, contributorId = user.id,
             contributorName = user.displayName, status = RecordStatus.SUBMITTED, licenseId = licenseId)
+        database.withTransaction {
         imageDao.insert(entry)
         recordConsent(user.id, "IMAGE", entry.id, "DATASET_PUBLICATION_CC_BY_SA")
         logAudit(user.id, user.displayName, "SUBMIT_IMAGE", "IMAGE", entry.id, "Submitted image item '$title'")
+            enqueue("images", entry.id, entry, user.id)
+        }
         Result.success(entry.id)
     }
 
-    suspend fun reviewRecord(recordType: String, recordId: String, decision: String, comments: String, confidenceScore: Int): Result<Unit> = withContext(Dispatchers.IO) {
-        val validator = _currentUser.value ?: return@withContext Result.failure(Exception("Must be signed in to validate."))
-        if (validator.role !in setOf(UserRole.VALIDATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)) {
-            return@withContext Result.failure(Exception("Validator role required."))
-        }
-        val type = recordType.trim().uppercase()
-        val normalizedDecision = decision.trim().uppercase()
-        if (normalizedDecision !in setOf("APPROVED", "REJECTED", "CHANGES_REQUESTED")) return@withContext Result.failure(Exception("Invalid validation decision."))
-        if (confidenceScore !in 1..5) return@withContext Result.failure(Exception("Confidence score must be between 1 and 5."))
-        if (validationDao.hasReviewed(type, recordId, validator.id)) return@withContext Result.failure(Exception("You have already reviewed this record."))
-
-        val status = when (normalizedDecision) {
-            "APPROVED" -> RecordStatus.APPROVED
-            "REJECTED" -> RecordStatus.REJECTED
-            else -> RecordStatus.CHANGES_REQUESTED
-        }
-        when (type) {
-            "LEXICON" -> lexiconDao.getById(recordId)?.let { entry ->
-                if (entry.contributorId == validator.id) return@withContext Result.failure(Exception("Self-validation prohibited."))
-                lexiconDao.update(entry.copy(status = status, publishedAt = if (status == RecordStatus.APPROVED) System.currentTimeMillis() else null, updatedAt = System.currentTimeMillis()))
-            } ?: return@withContext Result.failure(Exception("Record not found."))
-            "SENTENCE" -> sentenceDao.getById(recordId)?.let { entry ->
-                if (entry.contributorId == validator.id) return@withContext Result.failure(Exception("Self-validation prohibited."))
-                sentenceDao.update(entry.copy(status = status, updatedAt = System.currentTimeMillis()))
-            } ?: return@withContext Result.failure(Exception("Record not found."))
-            "SPEECH" -> speechDao.getById(recordId)?.let { entry ->
-                if (entry.contributorId == validator.id) return@withContext Result.failure(Exception("Self-validation prohibited."))
-                speechDao.update(entry.copy(status = status, qualityScore = confidenceScore.toDouble()))
-            } ?: return@withContext Result.failure(Exception("Record not found."))
-            "STORY" -> storyDao.getById(recordId)?.let { entry ->
-                if (entry.contributorId == validator.id) return@withContext Result.failure(Exception("Self-validation prohibited."))
-                storyDao.update(entry.copy(status = status))
-            } ?: return@withContext Result.failure(Exception("Record not found."))
-            "KNOWLEDGE" -> knowledgeDao.getById(recordId)?.let { entry ->
-                if (entry.contributorId == validator.id) return@withContext Result.failure(Exception("Self-validation prohibited."))
-                knowledgeDao.update(entry.copy(status = status))
-            } ?: return@withContext Result.failure(Exception("Record not found."))
-            "IMAGE" -> imageDao.getById(recordId)?.let { entry ->
-                if (entry.contributorId == validator.id) return@withContext Result.failure(Exception("Self-validation prohibited."))
-                imageDao.update(entry.copy(status = status))
-            } ?: return@withContext Result.failure(Exception("Record not found."))
-            else -> return@withContext Result.failure(Exception("Unsupported record type."))
-        }
-
-        validationDao.insertReview(ValidationReview(
-            recordType = type, recordId = recordId, validatorId = validator.id, validatorName = validator.displayName,
-            decision = normalizedDecision, comments = comments.trim(), confidenceScore = confidenceScore, createdAt = System.currentTimeMillis()
-        ))
-        logAudit(validator.id, validator.displayName, "VALIDATE_$normalizedDecision", type, recordId, "Review decision: $normalizedDecision (Confidence: $confidenceScore/5)")
-        Result.success(Unit)
+    suspend fun reviewRecord(recordType: String, recordId: String, decision: String, comments: String, confidenceScore: Int): Result<Unit> = runCatching {
+        FirebaseFunctions.getInstance().getHttpsCallable("reviewSubmission").call(mapOf("collection" to DatasetCodec.collection(recordType), "recordId" to recordId, "decision" to decision, "comments" to comments, "confidenceScore" to confidenceScore)).await()
+        Unit
     }
 
     private suspend fun recordConsent(contributorId: String, subjectType: String, subjectId: String, consentType: String) {
         consentDao.insertConsent(ConsentRecord(contributorId = contributorId, subjectType = subjectType, subjectId = subjectId, consentType = consentType, isGranted = true))
     }
 
-    suspend fun withdrawConsent(subjectType: String, subjectId: String): Result<Unit> = withContext(Dispatchers.IO) {
-        val user = _currentUser.value ?: return@withContext Result.failure(Exception("Please sign in first."))
-        val existing = consentDao.getConsentForSubject(subjectType, subjectId) ?: return@withContext Result.failure(Exception("No consent record found."))
-        if (existing.contributorId != user.id && user.role !in setOf(UserRole.ADMIN, UserRole.SUPER_ADMIN)) return@withContext Result.failure(Exception("Unauthorized to withdraw consent."))
-        consentDao.updateConsent(existing.copy(isGranted = false, withdrawnAt = System.currentTimeMillis()))
-        when (subjectType.uppercase()) {
-            "LEXICON" -> lexiconDao.getById(subjectId)?.let { lexiconDao.update(it.copy(status = RecordStatus.ARCHIVED)) }
-            "SENTENCE" -> sentenceDao.getById(subjectId)?.let { sentenceDao.update(it.copy(status = RecordStatus.ARCHIVED)) }
-            "SPEECH" -> speechDao.getById(subjectId)?.let { speechDao.update(it.copy(status = RecordStatus.ARCHIVED)) }
-            "STORY" -> storyDao.getById(subjectId)?.let { storyDao.update(it.copy(status = RecordStatus.ARCHIVED)) }
-            "KNOWLEDGE" -> knowledgeDao.getById(subjectId)?.let { knowledgeDao.update(it.copy(status = RecordStatus.ARCHIVED)) }
-            "IMAGE" -> imageDao.getById(subjectId)?.let { imageDao.update(it.copy(status = RecordStatus.ARCHIVED)) }
-            else -> return@withContext Result.failure(Exception("Unsupported consent subject type."))
+    suspend fun withdrawConsent(subjectType: String, subjectId: String): Result<Unit> = runCatching { DatasetSyncWorker.lock.withLock {
+        val uid = _currentUser.value?.id ?: error("Sign in first.")
+        val collections = if (subjectType == "ALL_USER_RECORDS") DatasetCodec.collections else listOf(DatasetCodec.collection(subjectType))
+        // Stop pending local uploads before asking the server to archive records.
+        for (operation in database.cloudDao().pending(uid)) {
+            if (operation.collection in collections && (subjectType == "ALL_USER_RECORDS" || operation.recordId == subjectId)) {
+                database.cloudDao().put(operation.copy(state = "WITHDRAWN", error = "Consent withdrawn"))
+            }
         }
-        logAudit(user.id, user.displayName, "WITHDRAW_CONSENT", subjectType.uppercase(), subjectId, "Contributor withdrew consent; record archived.")
-        Result.success(Unit)
-    }
+        for (collection in collections) {
+            do {
+                val response = FirebaseFunctions.getInstance().getHttpsCallable("withdrawConsent").call(mapOf("collection" to collection, "recordId" to subjectId.takeUnless { subjectType == "ALL_USER_RECORDS" })).await().data as Map<*, *>
+            } while (response["remaining"] == true)
+        }
+        val localId = subjectId.takeUnless { subjectType == "ALL_USER_RECORDS" }
+        database.withTransaction {
+            if("lexicon" in collections) lexiconDao.archiveOwned(uid,localId)
+            if("sentences" in collections) sentenceDao.archiveOwned(uid,localId)
+            if("speech" in collections) speechDao.archiveOwned(uid,localId)
+            if("stories" in collections) storyDao.archiveOwned(uid,localId)
+            if("knowledge" in collections) knowledgeDao.archiveOwned(uid,localId)
+            if("images" in collections) imageDao.archiveOwned(uid,localId)
+        }
+        for (consent in consentDao.getConsentsForUser(uid).first()) {
+            if (subjectType == "ALL_USER_RECORDS" || consent.subjectId == subjectId) consentDao.updateConsent(consent.copy(isGranted = false, withdrawnAt = System.currentTimeMillis()))
+        }
+        Unit
+    } }
 
-    suspend fun generateApiKey(keyName: String): Result<Pair<String, ApiKey>> = withContext(Dispatchers.IO) {
-        val user = _currentUser.value ?: return@withContext Result.failure(Exception("Sign in required."))
-        if (user.role !in setOf(UserRole.RESEARCHER, UserRole.ADMIN, UserRole.SUPER_ADMIN)) return@withContext Result.failure(Exception("Researcher or administrator role required for API access."))
-        val cleanName = keyName.trim()
-        if (cleanName.isBlank()) return@withContext Result.failure(Exception("API key name cannot be empty."))
-        val rawToken = "khowar_live_" + UUID.randomUUID().toString().replace("-", "")
-        val hash = MessageDigest.getInstance("SHA-256").digest(rawToken.toByteArray()).joinToString("") { "%02x".format(it) }
-        val key = ApiKey(userId = user.id, keyName = cleanName, rawKeyDisplay = rawToken, hashedKey = hash, rateLimitPerHour = 2500)
-        metadataDao.insertApiKey(key)
-        logAudit(user.id, user.displayName, "GENERATE_API_KEY", "API_KEY", key.id, "Generated research API key '$cleanName'")
-        Result.success(Pair(rawToken, key))
-    }
+    suspend fun generateApiKey(keyName: String): Result<Pair<String, ApiKey>> = Result.failure(IllegalStateException("Research API access is planned. No live API credentials are issued by this app."))
 
     suspend fun revokeApiKey(apiKey: ApiKey): Result<Unit> = withContext(Dispatchers.IO) {
         val user = _currentUser.value ?: return@withContext Result.failure(Exception("Sign in required."))
@@ -332,80 +309,42 @@ class KhowarRepository(private val database: AppDatabase) {
         Result.success(Unit)
     }
 
-    /** New releases start as DRAFT; publication should be a deliberate governed step. */
-    suspend fun createDatasetVersion(versionNumber: String, releaseName: String, description: String): Result<Unit> = withContext(Dispatchers.IO) {
-        val user = _currentUser.value ?: return@withContext Result.failure(Exception("Admin role required."))
-        if (user.role !in setOf(UserRole.ADMIN, UserRole.SUPER_ADMIN)) return@withContext Result.failure(Exception("Admin role required."))
-        val cleanVersion = versionNumber.trim()
-        val cleanName = releaseName.trim()
-        if (cleanVersion.isBlank() || cleanName.isBlank()) return@withContext Result.failure(Exception("Version number and release name are required."))
-        val words = lexiconDao.getAllApproved().first()
-        val sentences = sentenceDao.getAllApproved().first()
-        val speech = speechDao.getAllApproved().first()
-        val durationSec = speechDao.totalApprovedDurationSeconds().first() ?: 0.0
-        val recordCount = words.size + sentences.size + speech.size
-        val speakerCount = speech.map { it.speakerPublicId }.distinct().size
-        val dialectCount = (words.map { it.dialectId } + sentences.map { it.dialectId } + speech.map { it.dialectId }).distinct().size
-        val validatedRecordCount = words.count { it.dataStage >= DataStage.COMMUNITY_VERIFIED } +
-                sentences.count { it.dataStage >= DataStage.COMMUNITY_VERIFIED } +
-                speech.count { it.dataStage >= DataStage.COMMUNITY_VERIFIED }
-        val researchReadyCount = words.count { it.dataStage >= DataStage.RESEARCH_READY } +
-                sentences.count { it.dataStage >= DataStage.RESEARCH_READY } +
-                speech.count { it.dataStage >= DataStage.RESEARCH_READY }
-
-        metadataDao.insertDatasetVersion(DatasetVersion(
-            versionNumber = cleanVersion, releaseName = cleanName, description = description.trim(), recordCount = recordCount,
-            speechHours = durationSec / 3600.0, speakerCount = speakerCount, dialectCount = dialectCount,
-            validatedRecordCount = validatedRecordCount, researchReadyRecordCount = researchReadyCount,
-            license = "CC BY-SA 4.0", status = "DRAFT", createdBy = user.displayName
-        ))
-        logAudit(user.id, user.displayName, "CREATE_DATASET_VERSION", "VERSION", cleanVersion, "Created draft dataset release $cleanVersion")
-        Result.success(Unit)
+    suspend fun createDatasetVersion(versionNumber: String, releaseName: String, description: String): Result<Unit> = runCatching {
+        FirebaseFunctions.getInstance().getHttpsCallable("createDatasetDraft").call(mapOf("version" to versionNumber, "name" to releaseName, "description" to description)).await()
+        Unit
     }
 
-    suspend fun submitReport(recordType: String, recordId: String, category: String, description: String): Result<Unit> = withContext(Dispatchers.IO) {
-        val user = _currentUser.value ?: return@withContext Result.failure(Exception("Sign in required."))
-        if (recordType.isBlank() || recordId.isBlank() || description.trim().isBlank()) return@withContext Result.failure(Exception("Report type, record and description are required."))
-        val report = ModerationReport(reporterId = user.id, reporterName = user.displayName, recordType = recordType.trim().uppercase(), recordId = recordId,
-            category = category.trim().uppercase(), description = description.trim())
-        metadataDao.insertModerationReport(report)
-        logAudit(user.id, user.displayName, "SUBMIT_REPORT", report.recordType, recordId, "Reported issue: ${report.category}")
-        Result.success(Unit)
+    suspend fun submitReport(recordType: String, recordId: String, category: String, description: String): Result<Unit> = runCatching {
+        FirebaseFunctions.getInstance().getHttpsCallable("reportDataset").call(mapOf("collection" to DatasetCodec.collection(recordType), "recordId" to recordId, "description" to description, "category" to category)).await()
+        Unit
     }
 
-    /** Export is restricted to research/admin roles and escapes text safely for machine-readable output. */
     suspend fun generateExport(format: String): String = withContext(Dispatchers.IO) {
-        val user = _currentUser.value ?: throw IllegalStateException("Sign in required to export dataset data.")
-        if (user.role !in setOf(UserRole.RESEARCHER, UserRole.ADMIN, UserRole.SUPER_ADMIN)) throw IllegalStateException("Researcher or administrator role required for dataset export.")
-        val words = lexiconDao.getAllApproved().first()
-        val sentences = sentenceDao.getAllApproved().first()
-        val speech = speechDao.getAllApproved().first()
-        fun csv(v: String) = "\"${v.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ")}\""
-        fun json(v: String): String = buildString {
-            append('"')
-            v.forEach { ch -> when (ch) {
-                '\\' -> append("\\\\"); '"' -> append("\\\""); '\n' -> append("\\n"); '\r' -> append("\\r"); '\t' -> append("\\t"); else -> append(ch)
-            } }
-            append('"')
+        val records = mutableListOf<org.json.JSONObject>()
+        for (collection in DatasetCodec.collections) {
+            var cursor: String? = null
+            do {
+                val response = FirebaseFunctions.getInstance().getHttpsCallable("listDataset").call(mapOf("collection" to collection, "export" to true, "cursor" to cursor)).await().data as Map<*, *>
+                for (raw in response["records"] as? List<*> ?: emptyList<Any>()) {
+                    val row = org.json.JSONObject(raw as Map<*, *>).put("collection", collection)
+                    records.add(row)
+                }
+                cursor = response["cursor"] as? String
+            } while (cursor != null)
         }
-        when (format.uppercase()) {
-            "CSV" -> buildString {
-                append("type,id,khowar_text,transliteration,english,urdu,dialect,region,license,published_at\n")
-                words.forEach { w -> append("${csv("WORD")},${csv(w.id)},${csv(w.khowarWord)},${csv(w.transliteration)},${csv(w.englishMeaning)},${csv(w.urduMeaning)},${csv(w.dialectId)},${csv(w.regionId)},${csv(w.licenseId)},${w.createdAt}\n") }
-                sentences.forEach { s -> append("${csv("SENTENCE")},${csv(s.id)},${csv(s.khowarText)},${csv(s.transliteration)},${csv(s.englishTranslation)},${csv(s.urduTranslation)},${csv(s.dialectId)},${csv(s.regionId)},${csv(s.licenseId)},${s.createdAt}\n") }
+        val canonical = records.sortedBy { it.getString("collection") + "/" + it.getString("id") }
+        val payload = canonical.joinToString("\n") { it.toString() }
+        val checksum = MessageDigest.getInstance("SHA-256").digest(payload.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
+        when(format.uppercase()) {
+            "JSONL" -> payload + if (payload.isNotEmpty()) "\n" else ""
+            "CSV" -> {
+                fun cell(value: String) = "\"" + value.replace("\"", "\"\"") + "\""
+                "collection,id,license,status,data_stage,created_at,published_at,record_json\n" + canonical.joinToString("\n") { row ->
+                    listOf("collection","id","licenseId","status","dataStage","createdAt","publishedAt").map { cell(row.optString(it)) }.plus(cell(row.toString())).joinToString(",")
+                }
             }
-            "JSONL" -> buildString {
-                words.forEach { w -> append("{\"type\":\"word\",\"id\":${json(w.id)},\"khowar\":${json(w.khowarWord)},\"transliteration\":${json(w.transliteration)},\"english\":${json(w.englishMeaning)},\"urdu\":${json(w.urduMeaning)},\"pos\":${json(w.partOfSpeech.name)},\"dialect\":${json(w.dialectId)},\"region\":${json(w.regionId)},\"license\":${json(w.licenseId)}}\n") }
-                sentences.forEach { s -> append("{\"type\":\"sentence\",\"id\":${json(s.id)},\"khowar\":${json(s.khowarText)},\"transliteration\":${json(s.transliteration)},\"english\":${json(s.englishTranslation)},\"urdu\":${json(s.urduTranslation)},\"dialect\":${json(s.dialectId)},\"region\":${json(s.regionId)},\"license\":${json(s.licenseId)}}\n") }
-                speech.forEach { sp -> append("{\"type\":\"speech\",\"id\":${json(sp.id)},\"speaker\":${json(sp.speakerPublicId)},\"duration_s\":${sp.durationSeconds},\"transcript\":${json(sp.transcriptKhowar)},\"english\":${json(sp.englishTranslation)},\"dialect\":${json(sp.dialectId)},\"region\":${json(sp.regionId)},\"license\":${json(sp.licenseId)}}\n") }
-            }
-            else -> buildString {
-                append("{\n  \"project\": \"Khowar Dataset\",\n  \"tagline\": \"Preserving Khowar. Powering AI. Building the Future.\",\n  \"exported_at\": ${System.currentTimeMillis()},\n  \"total_records\": ${words.size + sentences.size + speech.size},\n  \"lexicon\": [\n")
-                words.forEachIndexed { i, w -> append("    {\"id\":${json(w.id)},\"khowar\":${json(w.khowarWord)},\"transliteration\":${json(w.transliteration)},\"english\":${json(w.englishMeaning)},\"urdu\":${json(w.urduMeaning)},\"pos\":${json(w.partOfSpeech.name)},\"dialect\":${json(w.dialectId)},\"region\":${json(w.regionId)}}${if (i < words.size - 1) "," else ""}\n") }
-                append("  ],\n  \"sentences\": [\n")
-                sentences.forEachIndexed { i, s -> append("    {\"id\":${json(s.id)},\"khowar\":${json(s.khowarText)},\"transliteration\":${json(s.transliteration)},\"english\":${json(s.englishTranslation)},\"urdu\":${json(s.urduTranslation)},\"dialect\":${json(s.dialectId)},\"region\":${json(s.regionId)}}${if (i < sentences.size - 1) "," else ""}\n") }
-                append("  ]\n}\n")
-            }
+            "JSON" -> org.json.JSONObject().put("schema_version", "1.0").put("exported_at",System.currentTimeMillis()).put("total_records",canonical.size).put("records_jsonl_sha256", checksum).put("records",org.json.JSONArray(canonical)).toString(2)
+            else -> error("Unsupported export format")
         }
     }
 

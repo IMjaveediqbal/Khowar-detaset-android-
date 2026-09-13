@@ -7,7 +7,7 @@ data class AiSuggestionResult(
     val transliteration: String,
     val suggestedPos: PartOfSpeech,
     val grammaticalNotes: String,
-    val modelName: String = "LinguisticAI-Khowar-Assist-v1"
+    val modelName: String = "local-heuristic-v1"
 )
 
 object AiAssistanceService {
@@ -25,7 +25,7 @@ object AiAssistanceService {
             else -> PartOfSpeech.NOUN
         }
 
-        val notes = when (pos) {
+        val notes = "Heuristic only; a native speaker must verify this suggestion. " + when (pos) {
             PartOfSpeech.VERB -> "Infinitive verb candidate. In Khowar, verbal stems often end in -ik or -ak."
             PartOfSpeech.NOUN -> "Standard nominal entry. Review gender / plural declension."
             PartOfSpeech.ADJECTIVE -> "Descriptive adjective. Check agreement with noun gender/class."
@@ -36,7 +36,7 @@ object AiAssistanceService {
             transliteration = translit,
             suggestedPos = pos,
             grammaticalNotes = notes,
-            modelName = "LinguisticAI-Khowar-Assist-v1"
+            modelName = "local-heuristic-v1"
         )
     }
 }

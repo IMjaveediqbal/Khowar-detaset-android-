@@ -1,44 +1,20 @@
 rules_version = '2';
-
 service firebase.storage {
   match /b/{bucket}/o {
-    function signedIn() {
-      return request.auth != null;
+    function owns(uid) { return request.auth != null && request.auth.uid == uid; }
+    function reviewer() {
+      return request.auth != null && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['VALIDATOR','EXPERT','RESEARCHER','DATA_STEWARD','ADMIN','SUPER_ADMIN'];
     }
-
-    function isPrivilegedReader() {
-      return signedIn()
-        && request.auth.token.role in [
-          'VALIDATOR', 'EXPERT', 'RESEARCHER', 'MODERATOR',
-          'DATA_STEWARD', 'ADMIN', 'SUPER_ADMIN'
-        ];
+    match /{collection}/{uid}/{id} {
+      function datasetExists() { return firestore.exists(/databases/(default)/documents/$(collection)/$(id)); }
+      function active() { return datasetExists() && firestore.get(/databases/(default)/documents/$(collection)/$(id)).data.consentGranted == true; }
+      allow read: if collection in ['speech','images'] && (owns(uid) || (reviewer() && active()));
+      // Upload retry allowed only before metadata exists; reviewed media is immutable.
+      allow create, update: if owns(uid) && !datasetExists() && (
+        (collection == 'speech' && request.resource.size > 0 && request.resource.size < 100 * 1024 * 1024 && request.resource.contentType == 'audio/mp4') ||
+        (collection == 'images' && request.resource.size > 0 && request.resource.size < 15 * 1024 * 1024 && request.resource.contentType.matches('image/.*')));
+      allow delete: if owns(uid) && (!datasetExists() || !active());
     }
-
-    function owns(userId) {
-      return signedIn() && request.auth.uid == userId;
-    }
-
-    match /speech/{userId}/{fileName} {
-      // Speech recordings are private to their contributor and trusted
-      // review/research roles. Clients cannot write into another user's path.
-      allow read: if owns(userId) || isPrivilegedReader();
-      allow create, update: if owns(userId)
-                            && request.resource.size < 100 * 1024 * 1024
-                            && request.resource.contentType.matches('audio/.*');
-      allow delete: if owns(userId);
-    }
-
-    match /images/{userId}/{fileName} {
-      allow read: if owns(userId) || isPrivilegedReader();
-      allow create, update: if owns(userId)
-                            && request.resource.size < 15 * 1024 * 1024
-                            && request.resource.contentType.matches('image/.*');
-      allow delete: if owns(userId);
-    }
-
-    // Explicit deny-by-default for every unrecognized path.
-    match /{allPaths=**} {
-      allow read, write: if false;
-    }
+    match /{path=**} { allow read, write: if false; }
   }
 }

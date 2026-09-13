@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -31,7 +32,7 @@ fun ContributorHubScreen(
     viewModel: KhowarViewModel,
     modifier: Modifier = Modifier
 ) {
-    var showForms by remember { mutableStateOf(false) }
+    var showForms by rememberSaveable { mutableStateOf(false) }
 
     if (showForms) {
         ContributeScreen(viewModel = viewModel, modifier = modifier)
@@ -42,7 +43,10 @@ fun ContributorHubScreen(
     val sentenceQueue by viewModel.sentenceQueue.collectAsState()
     val speechQueue by viewModel.speechQueue.collectAsState()
     val storyQueue by viewModel.storyQueue.collectAsState()
-    val pendingCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size
+    val knowledgeQueue by viewModel.knowledgeQueue.collectAsState()
+    val imageQueue by viewModel.imageQueue.collectAsState()
+    val stats by viewModel.statistics.collectAsState()
+    val pendingCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size + knowledgeQueue.size + imageQueue.size
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -53,7 +57,7 @@ fun ContributorHubScreen(
             ContributorQualityHeader(
                 qualityScore = 0,
                 pendingCount = pendingCount,
-                approvedCount = 0
+                approvedCount = stats.totalApprovedRecords
             )
         }
 

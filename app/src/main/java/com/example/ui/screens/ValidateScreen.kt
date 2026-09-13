@@ -41,12 +41,13 @@ fun ValidateScreen(
     val sentenceQueue by viewModel.sentenceQueue.collectAsState()
     val speechQueue by viewModel.speechQueue.collectAsState()
     val storyQueue by viewModel.storyQueue.collectAsState()
+    val imageQueue by viewModel.imageQueue.collectAsState()
     val knowledgeQueue by viewModel.knowledgeQueue.collectAsState()
 
     var selectedReviewRecord by remember { mutableStateOf<Any?>(null) }
     var reviewQueueType by remember { mutableStateOf("ALL") }
 
-    val totalQueueCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size + knowledgeQueue.size
+    val totalQueueCount = lexiconQueue.size + sentenceQueue.size + speechQueue.size + storyQueue.size + knowledgeQueue.size + imageQueue.size
 
     Column(modifier = modifier.fillMaxSize()) {
         // Queue Header
@@ -135,6 +136,10 @@ fun ValidateScreen(
                 contentPadding = PaddingValues(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                if(reviewQueueType == "ALL") {
+                    items(knowledgeQueue,key={it.id}) { record -> ValidationCard("KNOWLEDGE",record.title,record.khowarContent,record.contributorName,record.dialectId) { selectedReviewRecord=record } }
+                    items(imageQueue,key={it.id}) { record -> ValidationCard("IMAGE",record.title,record.khowarLabel,record.contributorName,record.regionId) { selectedReviewRecord=record } }
+                }
                 // Lexicon items in queue
                 if (reviewQueueType == "ALL" || reviewQueueType == "WORDS") {
                     items(lexiconQueue) { word ->
@@ -300,6 +305,7 @@ fun ValidationDecisionDialog(
         is SpeechRecording -> Triple("SPEECH", record.id, record.contributorId == currentUser?.id)
         is StoryEntry -> Triple("STORY", record.id, record.contributorId == currentUser?.id)
         is KnowledgeEntry -> Triple("KNOWLEDGE", record.id, record.contributorId == currentUser?.id)
+        is ImageEntry -> Triple("IMAGE",record.id,record.contributorId == currentUser?.id)
         else -> Triple("RECORD", "", false)
     }
 
@@ -365,6 +371,8 @@ fun ValidationDecisionDialog(
                                 Text(if (isPlaying) "Pause Audio" else "Listen to Audio Recording", color = Color.White)
                             }
                         }
+                        is ImageEntry -> { Text(record.title); Text(record.khowarLabel); Text(record.culturalContext) }
+                        is KnowledgeEntry -> { Text(record.title); Text(record.khowarContent); Text(record.explanation) }
                         is StoryEntry -> {
                             Text(record.title, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                             Text(record.khowarText, fontSize = 13.sp)
@@ -419,7 +427,7 @@ fun ValidationDecisionDialog(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
-                                text = "Rule: You cannot validate your own submission. Please switch to another validator profile to review.",
+                                text = "Rule: You cannot validate your own submission. A different authorized reviewer must review it.",
                                 color = CoralAccent,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(10.dp)
@@ -441,7 +449,7 @@ fun ValidationDecisionDialog(
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Approve & Publish", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                Text("Approve review", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
 
                             OutlinedButton(

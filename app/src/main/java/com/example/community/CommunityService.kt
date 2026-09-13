@@ -21,7 +21,7 @@ class CommunityService(
     private val posts = db.collection("communityPosts")
 
     suspend fun ensureAuthenticated() {
-        if (auth.currentUser == null) auth.signInAnonymously().await()
+        require(auth.currentUser != null && auth.currentUser?.isAnonymous == false) { "Sign in to participate." }
     }
 
     fun observePosts(category: String? = null, limit: Long = 50): Flow<List<CommunityPost>> = callbackFlow {
@@ -72,20 +72,8 @@ class CommunityService(
     suspend fun addComment(postId: String, profile: User, body: String): Result<String> = runCatching {
         ensureAuthenticated()
         require(body.trim().length in 2..3000) { "Reply must be 2–3000 characters." }
-        val postRef = posts.document(postId)
-        val commentRef = postRef.collection("comments").document()
-        db.runTransaction { tx ->
-            tx.set(commentRef, mapOf(
-                "ownerUid" to auth.currentUser!!.uid,
-                "authorProfileId" to profile.id,
-                "authorName" to profile.displayName,
-                "body" to body.trim(),
-                "accepted" to false,
-                "createdAt" to FieldValue.serverTimestamp()
-            ))
-            tx.update(postRef, "answerCount", FieldValue.increment(1))
-        }.await()
-        commentRef.id
+        val result = functions.getHttpsCallable("addCommunityComment").call(mapOf("postId" to postId, "body" to body.trim(), "commentId" to java.util.UUID.randomUUID().toString())).await().data as Map<*, *>
+        result["id"].toString()
     }
 
     suspend fun markSolved(postId: String, profile: User): Result<Unit> = runCatching {

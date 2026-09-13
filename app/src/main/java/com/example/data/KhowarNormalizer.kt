@@ -21,12 +21,9 @@ object KhowarNormalizer {
         text = text
             .replace('\u064A', '\u06CC') // Arabic Yeh -> Farsi Yeh
             .replace('\u0649', '\u06CC') // Alef Maksura -> Yeh
-            .replace('\u06D2', '\u06CC') // Yeh Barree -> Yeh
             .replace('\u0643', '\u06A9') // Arabic Kaf -> Keheh
             .replace('\u0629', '\u06C1') // Teh Marbuta -> Goal Heh
             .replace('\u0647', '\u06C1') // Arabic Heh -> Goal Heh
-            .replace('\u06BE', '\u06C1') // Do-Chashmi Heh -> Goal Heh
-            .replace('\u0624', '\u0648') // Waw with Hamza -> Waw
 
         // Arabic diacritics/tashkeel.
         text = text.replace(Regex("[\\u064B-\\u0652\\u0670\\u06DF-\\u06E8\\u06EA-\\u06ED]"), "")
@@ -50,6 +47,9 @@ object KhowarNormalizer {
 
         return text.replace(Regex("\\s+"), " ").trim()
     }
+
+    /** Human-entered transliteration is required; never invent a spelling. */
+    fun generateTransliterationHint(input: String): String = ""
 
     /** Normalizes Latin transliteration for consistent search. */
     fun normalizeTransliteration(input: String): String =

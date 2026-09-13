@@ -4,6 +4,9 @@ import android.content.Context
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.os.Build
+import android.os.SystemClock
+import com.google.firebase.storage.FirebaseStorage
+import java.util.UUID
 import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,11 +42,12 @@ class AudioRecorderHelper(private val context: Context) {
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
                 setAudioSamplingRate(44100)
+                setAudioChannels(1)
                 setAudioEncodingBitRate(128000)
                 setOutputFile(outputFile.absolutePath)
                 prepare()
                 start()
-                startTimeMillis = System.currentTimeMillis()
+                startTimeMillis = SystemClock.elapsedRealtime()
                 _isRecording.value = true
             } catch (e: Exception) {
                 Log.e("AudioRecorderHelper", "Failed to start recording: ${e.message}")
@@ -58,31 +62,26 @@ class AudioRecorderHelper(private val context: Context) {
 
     fun stopRecording(): Double {
         if (!_isRecording.value) return 0.0
-        val duration = (System.currentTimeMillis() - startTimeMillis) / 1000.0
-        try {
-            recorder?.apply {
-                stop()
-                release()
-            }
-        } catch (e: Exception) {
-            Log.e("AudioRecorderHelper", "Error stopping recorder: ${e.message}")
-        } finally {
+        val duration = (SystemClock.elapsedRealtime() - startTimeMillis) / 1000.0
+        var completed = false
+        try { recorder?.stop(); completed = true }
+        catch (e: Exception) { currentFilePath?.let { File(it).delete() } }
+        finally {
+            runCatching { recorder?.release() }
             recorder = null
             _isRecording.value = false
-            _recordingDurationSeconds.value = duration
+            _recordingDurationSeconds.value = if (completed) duration else 0.0
         }
-        return duration
+        return if (completed) duration else 0.0
     }
 
     fun cancelRecording() {
         try {
-            recorder?.apply {
-                stop()
-                release()
-            }
+            recorder?.stop()
         } catch (e: Exception) {
             // ignore
         } finally {
+            runCatching { recorder?.release() }
             recorder = null
             _isRecording.value = false
             currentFilePath?.let {
@@ -106,8 +105,18 @@ class AudioPlayerHelper {
     private val _duration = MutableStateFlow(0)
     val duration: StateFlow<Int> = _duration.asStateFlow()
 
+    private var requestId: String = ""
     fun playAudio(filePath: String, onCompletion: () -> Unit = {}) {
         stopAudio()
+        if (filePath.startsWith("cloud:")) {
+            val token = UUID.randomUUID().toString()
+            requestId = token
+            val destination = File.createTempFile("khowar-playback-", ".m4a")
+            FirebaseStorage.getInstance().reference.child(filePath.removePrefix("cloud:")).getFile(destination)
+                .addOnSuccessListener { if (requestId == token) playAudio(destination.absolutePath) { destination.delete(); onCompletion() } else destination.delete() }
+                .addOnFailureListener { destination.delete(); Log.e("AudioPlayerHelper", "Unable to download authorized recording", it) }
+            return
+        }
         val file = File(filePath)
         if (!file.exists()) {
             Log.e("AudioPlayerHelper", "Audio file not found: $filePath")
@@ -117,16 +126,19 @@ class AudioPlayerHelper {
         try {
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(filePath)
-                prepare()
-                _duration.value = this.duration
+                setOnPreparedListener { player ->
+                    _duration.value = player.duration
+                    player.start()
+                    _isPlaying.value = true
+                }
+                setOnErrorListener { _, _, _ -> stopAudio(); true }
+                prepareAsync()
                 setOnCompletionListener {
                     _isPlaying.value = false
                     onCompletion()
                 }
-                start()
-                _isPlaying.value = true
             }
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             Log.e("AudioPlayerHelper", "Playback error: ${e.message}")
             stopAudio()
         }
@@ -151,6 +163,7 @@ class AudioPlayerHelper {
     }
 
     fun stopAudio() {
+        requestId = ""
         try {
             mediaPlayer?.apply {
                 if (isPlaying) stop()

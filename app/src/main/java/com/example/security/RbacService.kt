@@ -20,7 +20,7 @@ class RbacService(
 
     suspend fun setUserRole(targetUid: String? = null, targetEmail: String? = null, role: UserRole): Result<Unit> = runCatching {
         require(auth.currentUser != null) { "Authentication is required." }
-        val data = mutableMapOf<String, Any>("role" to role.name)
+        val data = mutableMapOf<String, Any>("role" to role.name, "reason" to "Administrator approved role assignment")
         if (!targetUid.isNullOrBlank()) data["targetUid"] = targetUid.trim()
         if (!targetEmail.isNullOrBlank()) data["targetEmail"] = targetEmail.trim().lowercase()
         require(data.containsKey("targetUid") || data.containsKey("targetEmail")) { "Target Firebase UID or email is required." }

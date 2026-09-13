@@ -25,15 +25,16 @@ class ResearchMetricsRepository(database: AppDatabase) {
         validationDao.countAllReviews(),
         validationDao.countDistinctValidators(),
         validationDao.countMultiReviewedRecords(),
-        validationDao.countUnanimousMultiReviewedRecords()
-    ) { totalReviews, validators, multiReviewed, unanimous ->
+        validationDao.countUnanimousMultiReviewedRecords(),
+        validationDao.countReviewsOnMultiReviewedRecords()
+    ) { totalReviews, validators, multiReviewed, unanimous, multiReviewCount ->
         val agreement = if (multiReviewed > 0) {
             unanimous.toDouble() / multiReviewed.toDouble() * 100.0
         } else {
             0.0
         }
         val averageReviews = if (multiReviewed > 0) {
-            totalReviews.toDouble() / multiReviewed.toDouble()
+            multiReviewCount.toDouble() / multiReviewed.toDouble()
         } else {
             0.0
         }

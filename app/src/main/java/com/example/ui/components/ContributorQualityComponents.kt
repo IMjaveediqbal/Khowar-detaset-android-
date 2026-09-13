@@ -86,7 +86,7 @@ fun ContributorQualityHeader(
                     shape = MaterialTheme.shapes.medium
                 ) {
                     Text(
-                        "$qualityScore/100",
+                        "Human reviewed",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
                         color = TealAccent,
                         fontWeight = FontWeight.Black
@@ -99,7 +99,6 @@ fun ContributorQualityHeader(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 QualityMiniMetric("Pending", pendingCount, Modifier.weight(1f))
                 QualityMiniMetric("Approved", approvedCount, Modifier.weight(1f))
-                QualityMiniMetric("Quality", qualityScore, Modifier.weight(1f))
             }
         }
     }

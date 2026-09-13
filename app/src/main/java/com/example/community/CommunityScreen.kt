@@ -61,6 +61,10 @@ private val communityCategories = listOf(
 @Composable
 fun CommunityScreen(viewModel: KhowarViewModel) {
     val profile by viewModel.currentUser.collectAsState()
+    if (com.google.firebase.FirebaseApp.getApps(androidx.compose.ui.platform.LocalContext.current).isEmpty()) {
+        Column(Modifier.padding(20.dp)) { Text("Community needs Firebase configuration."); TextButton(onClick={CommunityUiState.hide()}) { Text("Back") } }
+        return
+    }
     val service = remember { CommunityService() }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedPost by remember { mutableStateOf<CommunityPost?>(null) }
