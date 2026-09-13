@@ -19,14 +19,14 @@ object KhowarNormalizer {
 
         // Common Arabic/Perso-Arabic variants used when typing Khowar.
         text = text
-            .replace('\u064A', '\u06CC') // Arabic Yeh -> Farsi Yeh
-            .replace('\u0649', '\u06CC') // Alef Maksura -> Yeh
-            .replace('\u06D2', '\u06CC') // Yeh Barree -> Yeh
-            .replace('\u0643', '\u06A9') // Arabic Kaf -> Keheh
-            .replace('\u0629', '\u06C1') // Teh Marbuta -> Goal Heh
-            .replace('\u0647', '\u06C1') // Arabic Heh -> Goal Heh
-            .replace('\u06BE', '\u06C1') // Do-Chashmi Heh -> Goal Heh
-            .replace('\u0624', '\u0648') // Waw with Hamza -> Waw
+            .replace('\u064A', '\u06CC')
+            .replace('\u0649', '\u06CC')
+            .replace('\u06D2', '\u06CC')
+            .replace('\u0643', '\u06A9')
+            .replace('\u0629', '\u06C1')
+            .replace('\u0647', '\u06C1')
+            .replace('\u06BE', '\u06C1')
+            .replace('\u0624', '\u0648')
 
         // Arabic diacritics/tashkeel.
         text = text.replace(Regex("[\\u064B-\\u0652\\u0670\\u06DF-\\u06E8\\u06EA-\\u06ED]"), "")
@@ -60,4 +60,39 @@ object KhowarNormalizer {
             .replace(Regex("[^a-z0-9'\\s-]"), "")
             .replace(Regex("\\s+"), " ")
             .trim()
+
+    /**
+     * Produces a deterministic best-effort Latin hint for Arabic/Perso-Arabic Khowar.
+     * This is intentionally a hint, not an authoritative linguistic transliteration.
+     */
+    fun generateTransliterationHint(input: String): String {
+        val normalized = normalizeKhowarText(input)
+        if (normalized.isBlank()) return ""
+        if (normalized.all { it.isLetterOrDigit() || it.isWhitespace() || it in "' -" && it.code < 128 }) {
+            return normalizeTransliteration(normalized)
+        }
+
+        val map = mapOf(
+            'ا' to "a", 'آ' to "a", 'ب' to "b", 'پ' to "p", 'ت' to "t", 'ٹ' to "t",
+            'ث' to "s", 'ج' to "j", 'چ' to "ch", 'ح' to "h", 'خ' to "kh", 'د' to "d",
+            'ڈ' to "d", 'ذ' to "z", 'ر' to "r", 'ڑ' to "r", 'ز' to "z", 'ژ' to "zh",
+            'س' to "s", 'ش' to "sh", 'ص' to "s", 'ض' to "z", 'ط' to "t", 'ظ' to "z",
+            'ع' to "'", 'غ' to "gh", 'ف' to "f", 'ق' to "q", 'ک' to "k", 'گ' to "g",
+            'ل' to "l", 'م' to "m", 'ن' to "n", 'ں' to "n", 'و' to "w", 'ہ' to "h",
+            'ھ' to "h", 'ی' to "y", 'ے' to "e", 'ئ' to "y", 'ء' to "'"
+        )
+
+        return buildString(normalized.length * 2) {
+            normalized.forEach { ch ->
+                append(
+                    when {
+                        ch in map -> map.getValue(ch)
+                        ch.isLetterOrDigit() || ch in "' -" && ch.code < 128 -> ch.lowercaseChar()
+                        ch.isWhitespace() -> ' '
+                        else -> ' '
+                    }
+                )
+            }
+        }.replace(Regex("\\s+"), " ").trim()
+    }
 }
