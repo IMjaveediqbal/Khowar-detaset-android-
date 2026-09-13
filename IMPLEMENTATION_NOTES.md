@@ -27,3 +27,7 @@ This change does not supply a trained Khowar AI, a production HTTP research API,
 ## Validation
 
 Backend policy tests and Firebase emulator integration tests were run during implementation. Android compilation and final CI verification are pending; consult the pull request checks before merging.
+
+## Concurrent main-branch changes
+
+Integrated main through 361e577. Preserved its duplicate-RBAC removal and transliteration hint helper, corrected the helper's ASCII condition, and kept hints opt-in rather than silently inserting them into saved records. CI uses the restored Gradle 9.3.1 wrapper required by the existing Android plugin instead of main's temporary Gradle 8.13 workaround; release compilation does not require an owner's signing key.

@@ -142,7 +142,7 @@ class KhowarRepository(private val database: AppDatabase) {
         if (normalized.isBlank()) return@withContext Result.failure(Exception("Khowar word cannot be empty."))
         val entry = LexiconEntry(
             khowarWord = khowarWord.trim(), normalizedKhowarWord = normalized,
-            transliteration = transliteration.trim().ifEmpty { KhowarNormalizer.generateTransliterationHint(khowarWord) },
+            transliteration = transliteration.trim(),
             englishMeaning = englishMeaning.trim(), urduMeaning = urduMeaning.trim(), partOfSpeech = partOfSpeech,
             grammaticalCategory = grammaticalCategory.trim(), definition = definition.trim(), pronunciation = pronunciation.trim(),
             exampleSentenceKhowar = exampleKhowar.trim(), exampleSentenceEnglish = exampleEnglish.trim(), dialectId = dialectId,
@@ -166,7 +166,7 @@ class KhowarRepository(private val database: AppDatabase) {
         if (normalized.isBlank()) return@withContext Result.failure(Exception("Sentence cannot be empty."))
         val entry = SentenceEntry(
             khowarText = khowarText.trim(), normalizedText = normalized,
-            transliteration = transliteration.trim().ifEmpty { KhowarNormalizer.generateTransliterationHint(khowarText) },
+            transliteration = transliteration.trim(),
             englishTranslation = englishTranslation.trim(), urduTranslation = urduTranslation.trim(), context = context.trim(),
             dialectId = dialectId, regionId = regionId, source = source.trim(), contributorId = user.id,
             contributorName = user.displayName, status = RecordStatus.SUBMITTED, licenseId = licenseId
