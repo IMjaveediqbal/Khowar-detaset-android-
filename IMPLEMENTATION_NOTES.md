@@ -26,7 +26,7 @@ This change does not supply a trained Khowar AI, a production HTTP research API,
 
 ## Validation
 
-Backend policy tests and Firebase emulator integration tests were run during implementation. Android compilation and final CI verification are pending; consult the pull request checks before merging.
+GitHub Actions run 34763680478 passed the TypeScript build, 3 policy tests and all 9 Firebase emulator integration tests. Android compilation and final CI verification are pending; consult the pull request checks before merging.
 
 ## Concurrent main-branch changes
 

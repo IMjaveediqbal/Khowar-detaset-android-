@@ -145,6 +145,9 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
     private val _exportText = MutableStateFlow<String?>(null)
     val exportText: StateFlow<String?> = _exportText.asStateFlow()
 
+    val exportFormat = MutableStateFlow("JSONL")
+    fun showStatus(message: String) { _statusMessage.value = message }
+
     // Generated API Key
     private val _generatedApiKey = MutableStateFlow<Pair<String, ApiKey>?>(null)
     val generatedApiKey: StateFlow<Pair<String, ApiKey>?> = _generatedApiKey.asStateFlow()
@@ -171,7 +174,7 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
     fun authenticate(email: String, password: String, create: Boolean, name: String) {
         viewModelScope.launch(errorHandler) {
             val auth = firebaseAuth ?: error("Firebase is not configured. Add google-services.json first.")
-            require(email.isNotBlank() && password.length >= 8) { "Enter an email and a password of at least 8 characters." }
+            require(email.isNotBlank() && if (create) password.length >= 8 else password.isNotEmpty()) { "Enter your email and password. New passwords need at least 8 characters." }
             if (create) {
                 if (auth.currentUser?.isAnonymous == true) auth.currentUser!!.linkWithCredential(EmailAuthProvider.getCredential(email.trim(), password)).await()
                 else auth.createUserWithEmailAndPassword(email.trim(), password).await()
@@ -555,6 +558,7 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
     fun generateDatasetExport(format: String) {
         viewModelScope.launch(errorHandler) {
             val output = repository.generateExport(format)
+            exportFormat.value = format
             _exportText.value = output
             _statusMessage.value = "Generated $format dataset package (${output.lines().size} lines)"
         }

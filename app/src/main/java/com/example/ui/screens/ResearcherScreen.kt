@@ -25,18 +25,22 @@ fun ResearcherScreen(
     modifier: Modifier = Modifier
 ) {
     val exportText by viewModel.exportText.collectAsState()
-    val generatedApiKey by viewModel.generatedApiKey.collectAsState()
+    val exportFormat by viewModel.exportFormat.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val saveExport = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if(uri != null) scope.launch {
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                context.contentResolver.openOutputStream(uri)?.bufferedWriter(Charsets.UTF_8)?.use { it.write(exportText.orEmpty()) }
-            }
+            try {
+                val content = exportText ?: error("Generate an export first.")
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val stream = context.contentResolver.openOutputStream(uri) ?: error("Cannot open the selected file.")
+                    stream.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
+                }
+                viewModel.showStatus("Export saved.")
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { viewModel.showStatus("Could not save export: ${e.message}") }
         }
     }
-    val clipboardManager = LocalClipboardManager.current
-    var apiKeyName by remember { mutableStateOf("Khowar-Research-Project-Key") }
     var selectedExportFormat by remember { mutableStateOf("JSONL") }
 
     LazyColumn(
@@ -104,13 +108,13 @@ fun ResearcherScreen(
 
         item {
             ResearchCard("Dataset Release Checklist", "Create a release only after these research-governance checks are satisfied.") {
-                ChecklistRow("✓", "Consent status verified")
-                ChecklistRow("✓", "Duplicate and normalization checks completed")
-                ChecklistRow("✓", "Validation history retained")
-                ChecklistRow("✓", "Speaker-disjoint evaluation splits planned")
-                ChecklistRow("✓", "License and attribution documented")
-                ChecklistRow("✓", "Known limitations documented")
-                ChecklistRow("✓", "Version number and release notes assigned")
+                ChecklistRow("○", "Consent status verified")
+                ChecklistRow("○", "Duplicate and normalization checks completed")
+                ChecklistRow("○", "Validation history retained")
+                ChecklistRow("○", "Speaker-disjoint evaluation splits planned")
+                ChecklistRow("○", "License and attribution documented")
+                ChecklistRow("○", "Known limitations documented")
+                ChecklistRow("○", "Version number and release notes assigned")
             }
         }
 
@@ -137,8 +141,8 @@ fun ResearcherScreen(
                         Column(Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                 Text("Export Result (${raw.lines().size} lines)", color = EmeraldGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                TextButton(onClick = { saveExport.launch("khowar-export.${selectedExportFormat.lowercase()}") }) {
-                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TealAccent, modifier = Modifier.size(14.dp))
+                                TextButton(onClick = { saveExport.launch("khowar-export.${exportFormat.lowercase()}") }) {
+                                    Icon(Icons.Default.Save, contentDescription = "Save export", tint = TealAccent, modifier = Modifier.size(14.dp))
                                     Spacer(Modifier.width(4.dp)); Text("Save file", color = TealAccent, fontSize = 11.sp)
                                 }
                             }

@@ -28,7 +28,7 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
             item { OutlinedTextField(email,{email=it},label={Text("Email")},singleLine=true,modifier=Modifier.fillMaxWidth()) }
             item { OutlinedTextField(password,{password=it},label={Text("Password")},singleLine=true,visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth()) }
             if(create) item { OutlinedTextField(name,{name=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth()) }
-            item { Button(onClick={viewModel.authenticate(email,password,create,name);password=""},enabled=email.isNotBlank()&&password.length>=8&&(!create||name.length>=2)) { Text(if(create) "Create account" else "Sign in") } }
+            item { Button(onClick={viewModel.authenticate(email,password,create,name);password=""},enabled=email.isNotBlank()&&password.isNotEmpty()&&(!create||(password.length>=8&&name.length>=2))) { Text(if(create) "Create account" else "Sign in") } }
             item { TextButton(onClick={create=!create}) { Text(if(create) "Already have an account? Sign in" else "Create a new account") } }
         } else {
             item { Text("${user!!.email} · ${user!!.role}") }

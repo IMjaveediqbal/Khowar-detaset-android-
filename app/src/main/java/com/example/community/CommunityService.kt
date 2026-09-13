@@ -76,6 +76,12 @@ class CommunityService(
         result["id"].toString()
     }
 
+    suspend fun acceptAnswer(postId: String, commentId: String): Result<Unit> = runCatching {
+        ensureAuthenticated()
+        functions.getHttpsCallable("acceptCommunityAnswer").call(mapOf("postId" to postId, "commentId" to commentId)).await()
+        Unit
+    }
+
     suspend fun markSolved(postId: String, profile: User): Result<Unit> = runCatching {
         ensureAuthenticated()
         val ref = posts.document(postId)
