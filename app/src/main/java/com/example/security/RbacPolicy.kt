@@ -18,18 +18,21 @@ enum class RbacPermission {
 
 /** Client-side policy controls visibility/navigation only. Firebase Functions are authoritative. */
 object RbacPolicy {
-    private val permissions = mapOf(
-        UserRole.VISITOR to setOf(RbacPermission.VIEW_PUBLIC_DATA),
-        UserRole.CONTRIBUTOR to setOf(RbacPermission.VIEW_PUBLIC_DATA, RbacPermission.CONTRIBUTE_DATA),
-        UserRole.VALIDATOR to setOf(RbacPermission.VIEW_PUBLIC_DATA, RbacPermission.CONTRIBUTE_DATA, RbacPermission.VALIDATE_COMMUNITY),
-        UserRole.EXPERT to setOf(RbacPermission.VIEW_PUBLIC_DATA, RbacPermission.CONTRIBUTE_DATA, RbacPermission.VALIDATE_COMMUNITY, RbacPermission.VERIFY_EXPERT, RbacPermission.ACCESS_RESEARCH_HUB),
-        UserRole.RESEARCHER to setOf(RbacPermission.VIEW_PUBLIC_DATA, RbacPermission.ACCESS_RESEARCH_HUB),
-        UserRole.MODERATOR to setOf(RbacPermission.VIEW_PUBLIC_DATA, RbacPermission.CONTRIBUTE_DATA, RbacPermission.MODERATE_COMMUNITY),
-        UserRole.ADMIN to setOf(RbacPermission.VIEW_PUBLIC_DATA, RbacPermission.CONTRIBUTE_DATA, RbacPermission.VALIDATE_COMMUNITY, RbacPermission.VERIFY_EXPERT, RbacPermission.ACCESS_RESEARCH_HUB, RbacPermission.MODERATE_COMMUNITY, RbacPermission.MANAGE_DATASET, RbacPermission.MANAGE_USERS, RbacPermission.MANAGE_SECURITY, RbacPermission.RELEASE_DATASET, RbacPermission.VIEW_AUDIT_LOGS),
-        UserRole.SUPER_ADMIN to RbacPermission.entries.toSet()
+    private val mapping = mapOf(
+        RbacPermission.VIEW_PUBLIC_DATA to com.example.data.model.Permission.READ_PUBLIC_DATASET,
+        RbacPermission.CONTRIBUTE_DATA to com.example.data.model.Permission.CREATE_CONTRIBUTION,
+        RbacPermission.VALIDATE_COMMUNITY to com.example.data.model.Permission.VALIDATE_COMMUNITY,
+        RbacPermission.VERIFY_EXPERT to com.example.data.model.Permission.EXPERT_VERIFY,
+        RbacPermission.ACCESS_RESEARCH_HUB to com.example.data.model.Permission.EXPORT_RESEARCH_DATA,
+        RbacPermission.MODERATE_COMMUNITY to com.example.data.model.Permission.MANAGE_MODERATION,
+        RbacPermission.MANAGE_DATASET to com.example.data.model.Permission.MANAGE_METADATA,
+        RbacPermission.MANAGE_USERS to com.example.data.model.Permission.MANAGE_USERS,
+        RbacPermission.MANAGE_SECURITY to com.example.data.model.Permission.MANAGE_SYSTEM,
+        RbacPermission.RELEASE_DATASET to com.example.data.model.Permission.RELEASE_DATASET,
+        RbacPermission.VIEW_AUDIT_LOGS to com.example.data.model.Permission.VIEW_AUDIT_LOGS
     )
-
-    fun can(role: UserRole?, permission: RbacPermission): Boolean = role != null && permission in (permissions[role] ?: emptySet())
+    fun can(role: UserRole?, permission: RbacPermission): Boolean =
+        com.example.data.model.RbacPolicy.can(role ?: UserRole.VISITOR, mapping.getValue(permission))
     fun hasRole(role: UserRole?, vararg allowed: UserRole): Boolean = role != null && role in allowed
     fun isPrivileged(role: UserRole?): Boolean = hasRole(role, UserRole.VALIDATOR, UserRole.EXPERT, UserRole.RESEARCHER, UserRole.MODERATOR, UserRole.ADMIN, UserRole.SUPER_ADMIN)
     fun isAdministrative(role: UserRole?): Boolean = hasRole(role, UserRole.ADMIN, UserRole.SUPER_ADMIN)

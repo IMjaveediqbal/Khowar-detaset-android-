@@ -37,6 +37,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +62,10 @@ private val communityCategories = listOf(
 @Composable
 fun CommunityScreen(viewModel: KhowarViewModel) {
     val profile by viewModel.currentUser.collectAsState()
+    if (com.google.firebase.FirebaseApp.getApps(androidx.compose.ui.platform.LocalContext.current).isEmpty()) {
+        Column(Modifier.padding(20.dp)) { Text("Community needs Firebase configuration."); TextButton(onClick={CommunityUiState.hide()}) { Text("Back") } }
+        return
+    }
     val service = remember { CommunityService() }
     var selectedCategory by remember { mutableStateOf("All") }
     var selectedPost by remember { mutableStateOf<CommunityPost?>(null) }
@@ -228,6 +233,7 @@ private fun CreateDiscussionDialog(profile: User, service: CommunityService, onD
 
 @Composable
 private fun DiscussionDialog(post: CommunityPost, profile: User?, service: CommunityService, onClose: () -> Unit) {
+    var replyError by remember { mutableStateOf<String?>(null) }
     val comments by service.observeComments(post.id).collectAsState(initial = emptyList())
     var reply by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -240,7 +246,8 @@ private fun DiscussionDialog(post: CommunityPost, profile: User?, service: Commu
                     busy = true
                     scope.launch {
                         service.addComment(post.id, profile, reply)
-                        reply = ""
+                            .onSuccess { reply = ""; replyError = null }
+                            .onFailure { replyError = it.message ?: "Reply failed. Please retry." }
                         busy = false
                     }
                 }) { Text("Reply") }
@@ -251,6 +258,7 @@ private fun DiscussionDialog(post: CommunityPost, profile: User?, service: Commu
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { Text(post.body, style = MaterialTheme.typography.bodyLarge) }
+                if (replyError != null) item { Text(replyError.orEmpty(), color = MaterialTheme.colorScheme.error) }
                 item { Text("${comments.size} replies", style = MaterialTheme.typography.labelLarge) }
                 items(comments, key = { it.id }) { comment ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
@@ -258,6 +266,13 @@ private fun DiscussionDialog(post: CommunityPost, profile: User?, service: Commu
                             Text(comment.authorName, style = MaterialTheme.typography.labelMedium)
                             Text(comment.body)
                             if (comment.accepted) Text("Accepted answer", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall)
+                            else if (profile?.id == post.ownerUid) TextButton(enabled = !busy, onClick = {
+                                busy = true
+                                scope.launch {
+                                    service.acceptAnswer(post.id, comment.id).onFailure { replyError = it.message }
+                                    busy = false
+                                }
+                            }) { Text("Accept answer") }
                         }
                     }
                 }

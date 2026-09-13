@@ -11,8 +11,18 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LexiconDao {
-    @Query("SELECT * FROM lexicon_entries WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<LexiconEntry>>
+    @Query("SELECT * FROM lexicon_entries WHERE status = 'APPROVED' AND (:dialect = 'All' OR dialectId = :dialect) AND (normalizedKhowarWord LIKE :khowar ESCAPE '\\' OR urduMeaning LIKE :khowar ESCAPE '\\' OR (:hasLatin AND lower(transliteration) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(englishMeaning) LIKE :latin ESCAPE '\\')) ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    fun searchApproved(khowar: String, latin: String, hasLatin: Boolean, dialect: String, limit: Int): Flow<List<LexiconEntry>>
+
+    @Query("DELETE FROM lexicon_entries WHERE id = :id")
+    suspend fun deleteById(id: String)
+    @Query("UPDATE lexicon_entries SET status = 'ARCHIVED' WHERE contributorId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun archiveOwned(uid: String, id: String?)
+    @Query("DELETE FROM lexicon_entries WHERE status != 'APPROVED' AND contributorId != :uid AND NOT EXISTS (SELECT 1 FROM cloud_outbox WHERE collection = 'lexicon' AND recordId = lexicon_entries.id)")
+    suspend fun purgeOtherPrivate(uid: String)
+
+    @Query("SELECT * FROM lexicon_entries WHERE status = 'APPROVED' ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllApproved(limit: Int = 200): Flow<List<LexiconEntry>>
 
     @Query("SELECT * FROM lexicon_entries WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
     fun getReviewQueue(): Flow<List<LexiconEntry>>
@@ -41,8 +51,18 @@ interface LexiconDao {
 
 @Dao
 interface SentenceDao {
-    @Query("SELECT * FROM sentences WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<SentenceEntry>>
+    @Query("SELECT * FROM sentences WHERE status = 'APPROVED' AND (:dialect = 'All' OR dialectId = :dialect) AND (normalizedText LIKE :khowar ESCAPE '\\' OR urduTranslation LIKE :khowar ESCAPE '\\' OR (:hasLatin AND lower(transliteration) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(englishTranslation) LIKE :latin ESCAPE '\\')) ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    fun searchApproved(khowar: String, latin: String, hasLatin: Boolean, dialect: String, limit: Int): Flow<List<SentenceEntry>>
+
+    @Query("DELETE FROM sentences WHERE id = :id")
+    suspend fun deleteById(id: String)
+    @Query("UPDATE sentences SET status = 'ARCHIVED' WHERE contributorId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun archiveOwned(uid: String, id: String?)
+    @Query("DELETE FROM sentences WHERE status != 'APPROVED' AND contributorId != :uid AND NOT EXISTS (SELECT 1 FROM cloud_outbox WHERE collection = 'sentences' AND recordId = sentences.id)")
+    suspend fun purgeOtherPrivate(uid: String)
+
+    @Query("SELECT * FROM sentences WHERE status = 'APPROVED' ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllApproved(limit: Int = 200): Flow<List<SentenceEntry>>
 
     @Query("SELECT * FROM sentences WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
     fun getReviewQueue(): Flow<List<SentenceEntry>>
@@ -71,8 +91,18 @@ interface SentenceDao {
 
 @Dao
 interface SpeechDao {
-    @Query("SELECT * FROM speech_recordings WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<SpeechRecording>>
+    @Query("SELECT * FROM speech_recordings WHERE status = 'APPROVED' AND (:dialect = 'All' OR dialectId = :dialect) AND (normalizedTranscript LIKE :khowar ESCAPE '\\' OR urduTranslation LIKE :khowar ESCAPE '\\' OR (:hasLatin AND lower(transliteration) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(englishTranslation) LIKE :latin ESCAPE '\\')) ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    fun searchApproved(khowar: String, latin: String, hasLatin: Boolean, dialect: String, limit: Int): Flow<List<SpeechRecording>>
+
+    @Query("DELETE FROM speech_recordings WHERE id = :id")
+    suspend fun deleteById(id: String)
+    @Query("UPDATE speech_recordings SET status = 'ARCHIVED' WHERE contributorId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun archiveOwned(uid: String, id: String?)
+    @Query("DELETE FROM speech_recordings WHERE status != 'APPROVED' AND contributorId != :uid AND NOT EXISTS (SELECT 1 FROM cloud_outbox WHERE collection = 'speech' AND recordId = speech_recordings.id)")
+    suspend fun purgeOtherPrivate(uid: String)
+
+    @Query("SELECT * FROM speech_recordings WHERE status = 'APPROVED' ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllApproved(limit: Int = 200): Flow<List<SpeechRecording>>
 
     @Query("SELECT * FROM speech_recordings WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
     fun getReviewQueue(): Flow<List<SpeechRecording>>
@@ -101,8 +131,18 @@ interface SpeechDao {
 
 @Dao
 interface StoryDao {
-    @Query("SELECT * FROM stories WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<StoryEntry>>
+    @Query("SELECT * FROM stories WHERE status = 'APPROVED' AND (:dialect = 'All' OR dialectId = :dialect) AND (khowarText LIKE :khowar ESCAPE '\\' OR urduTranslation LIKE :khowar ESCAPE '\\' OR (:hasLatin AND lower(title) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(transliteration) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(englishTranslation) LIKE :latin ESCAPE '\\')) ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    fun searchApproved(khowar: String, latin: String, hasLatin: Boolean, dialect: String, limit: Int): Flow<List<StoryEntry>>
+
+    @Query("DELETE FROM stories WHERE id = :id")
+    suspend fun deleteById(id: String)
+    @Query("UPDATE stories SET status = 'ARCHIVED' WHERE contributorId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun archiveOwned(uid: String, id: String?)
+    @Query("DELETE FROM stories WHERE status != 'APPROVED' AND contributorId != :uid AND NOT EXISTS (SELECT 1 FROM cloud_outbox WHERE collection = 'stories' AND recordId = stories.id)")
+    suspend fun purgeOtherPrivate(uid: String)
+
+    @Query("SELECT * FROM stories WHERE status = 'APPROVED' ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllApproved(limit: Int = 200): Flow<List<StoryEntry>>
 
     @Query("SELECT * FROM stories WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
     fun getReviewQueue(): Flow<List<StoryEntry>>
@@ -128,8 +168,18 @@ interface StoryDao {
 
 @Dao
 interface ImageDao {
-    @Query("SELECT * FROM images WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<ImageEntry>>
+    @Query("SELECT * FROM images WHERE status = 'APPROVED' AND (:dialect = 'All' OR :dialect = 'Other') AND (khowarLabel LIKE :khowar ESCAPE '\\' OR (:hasLatin AND lower(title) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(englishLabel) LIKE :latin ESCAPE '\\')) ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    fun searchApproved(khowar: String, latin: String, hasLatin: Boolean, dialect: String, limit: Int): Flow<List<ImageEntry>>
+
+    @Query("DELETE FROM images WHERE id = :id")
+    suspend fun deleteById(id: String)
+    @Query("UPDATE images SET status = 'ARCHIVED' WHERE contributorId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun archiveOwned(uid: String, id: String?)
+    @Query("DELETE FROM images WHERE status != 'APPROVED' AND contributorId != :uid AND NOT EXISTS (SELECT 1 FROM cloud_outbox WHERE collection = 'images' AND recordId = images.id)")
+    suspend fun purgeOtherPrivate(uid: String)
+
+    @Query("SELECT * FROM images WHERE status = 'APPROVED' ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllApproved(limit: Int = 200): Flow<List<ImageEntry>>
 
     @Query("SELECT * FROM images WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
     fun getReviewQueue(): Flow<List<ImageEntry>>
@@ -155,8 +205,18 @@ interface ImageDao {
 
 @Dao
 interface KnowledgeDao {
-    @Query("SELECT * FROM knowledge WHERE status = 'APPROVED' ORDER BY createdAt DESC")
-    fun getAllApproved(): Flow<List<KnowledgeEntry>>
+    @Query("SELECT * FROM knowledge WHERE status = 'APPROVED' AND (:dialect = 'All' OR dialectId = :dialect) AND (khowarContent LIKE :khowar ESCAPE '\\' OR urduContent LIKE :khowar ESCAPE '\\' OR (:hasLatin AND lower(title) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(transliteration) LIKE :latin ESCAPE '\\') OR (:hasLatin AND lower(englishContent) LIKE :latin ESCAPE '\\')) ORDER BY createdAt DESC, id DESC LIMIT :limit")
+    fun searchApproved(khowar: String, latin: String, hasLatin: Boolean, dialect: String, limit: Int): Flow<List<KnowledgeEntry>>
+
+    @Query("DELETE FROM knowledge WHERE id = :id")
+    suspend fun deleteById(id: String)
+    @Query("UPDATE knowledge SET status = 'ARCHIVED' WHERE contributorId = :uid AND (:id IS NULL OR id = :id)")
+    suspend fun archiveOwned(uid: String, id: String?)
+    @Query("DELETE FROM knowledge WHERE status != 'APPROVED' AND contributorId != :uid AND NOT EXISTS (SELECT 1 FROM cloud_outbox WHERE collection = 'knowledge' AND recordId = knowledge.id)")
+    suspend fun purgeOtherPrivate(uid: String)
+
+    @Query("SELECT * FROM knowledge WHERE status = 'APPROVED' ORDER BY createdAt DESC LIMIT :limit")
+    fun getAllApproved(limit: Int = 200): Flow<List<KnowledgeEntry>>
 
     @Query("SELECT * FROM knowledge WHERE status IN ('SUBMITTED', 'UNDER_REVIEW') ORDER BY createdAt ASC")
     fun getReviewQueue(): Flow<List<KnowledgeEntry>>
@@ -226,6 +286,9 @@ interface ValidationDao {
     /** Number of multi-reviewed records where all validators selected the same decision. */
     @Query("SELECT COUNT(*) FROM (SELECT recordType, recordId FROM validation_reviews GROUP BY recordType, recordId HAVING COUNT(DISTINCT validatorId) >= 2 AND COUNT(DISTINCT decision) = 1)")
     fun countUnanimousMultiReviewedRecords(): Flow<Int>
+
+    @Query("SELECT COALESCE(SUM(n), 0) FROM (SELECT COUNT(*) n FROM validation_reviews GROUP BY recordType, recordId HAVING COUNT(DISTINCT validatorId) >= 2)")
+    fun countReviewsOnMultiReviewedRecords(): Flow<Int>
 
     /** Total validation records, useful for reporting coverage alongside agreement. */
     @Query("SELECT COUNT(*) FROM validation_reviews")
@@ -303,4 +366,16 @@ interface MetadataDao {
 
     @Update
     suspend fun updateModerationReport(report: ModerationReport)
+}
+
+@Dao
+interface CloudDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(operation: CloudOperation)
+    @Query("SELECT * FROM cloud_outbox WHERE ownerUid = :uid AND state IN ('PENDING','UPLOADING','FAILED') ORDER BY updatedAt")
+    suspend fun pending(uid: String): List<CloudOperation>
+    @Query("SELECT * FROM cloud_outbox WHERE `key` = :key")
+    suspend fun get(key: String): CloudOperation?
+    @Query("SELECT * FROM cloud_outbox WHERE ownerUid = :uid ORDER BY updatedAt DESC")
+    fun observe(uid: String): Flow<List<CloudOperation>>
 }

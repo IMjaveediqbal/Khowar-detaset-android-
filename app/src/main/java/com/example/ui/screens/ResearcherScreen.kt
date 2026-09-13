@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,9 +25,22 @@ fun ResearcherScreen(
     modifier: Modifier = Modifier
 ) {
     val exportText by viewModel.exportText.collectAsState()
-    val generatedApiKey by viewModel.generatedApiKey.collectAsState()
-    val clipboardManager = LocalClipboardManager.current
-    var apiKeyName by remember { mutableStateOf("Khowar-Research-Project-Key") }
+    val exportFormat by viewModel.exportFormat.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    val saveExport = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        if(uri != null) scope.launch {
+            try {
+                val content = exportText ?: error("Generate an export first.")
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val stream = context.contentResolver.openOutputStream(uri) ?: error("Cannot open the selected file.")
+                    stream.bufferedWriter(Charsets.UTF_8).use { it.write(content) }
+                }
+                viewModel.showStatus("Export saved.")
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { viewModel.showStatus("Could not save export: ${e.message}") }
+        }
+    }
     var selectedExportFormat by remember { mutableStateOf("JSONL") }
 
     LazyColumn(
@@ -94,13 +108,13 @@ fun ResearcherScreen(
 
         item {
             ResearchCard("Dataset Release Checklist", "Create a release only after these research-governance checks are satisfied.") {
-                ChecklistRow("✓", "Consent status verified")
-                ChecklistRow("✓", "Duplicate and normalization checks completed")
-                ChecklistRow("✓", "Validation history retained")
-                ChecklistRow("✓", "Speaker-disjoint evaluation splits planned")
-                ChecklistRow("✓", "License and attribution documented")
-                ChecklistRow("✓", "Known limitations documented")
-                ChecklistRow("✓", "Version number and release notes assigned")
+                ChecklistRow("○", "Consent status verified")
+                ChecklistRow("○", "Duplicate and normalization checks completed")
+                ChecklistRow("○", "Validation history retained")
+                ChecklistRow("○", "Speaker-disjoint evaluation splits planned")
+                ChecklistRow("○", "License and attribution documented")
+                ChecklistRow("○", "Known limitations documented")
+                ChecklistRow("○", "Version number and release notes assigned")
             }
         }
 
@@ -127,9 +141,9 @@ fun ResearcherScreen(
                         Column(Modifier.padding(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                 Text("Export Result (${raw.lines().size} lines)", color = EmeraldGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                TextButton(onClick = { clipboardManager.setText(AnnotatedString(raw)) }) {
-                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TealAccent, modifier = Modifier.size(14.dp))
-                                    Spacer(Modifier.width(4.dp)); Text("Copy", color = TealAccent, fontSize = 11.sp)
+                                TextButton(onClick = { saveExport.launch("khowar-export.${exportFormat.lowercase()}") }) {
+                                    Icon(Icons.Default.Save, contentDescription = "Save export", tint = TealAccent, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp)); Text("Save file", color = TealAccent, fontSize = 11.sp)
                                 }
                             }
                             Text(raw.take(500) + if (raw.length > 500) "\n... [truncated]" else "", fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary)
@@ -139,45 +153,8 @@ fun ResearcherScreen(
             }
         }
 
-        item {
-            ResearchCard("Research API Access", "Generate a project-specific bearer token for authorized research pipelines.") {
-                OutlinedTextField(value = apiKeyName, onValueChange = { apiKeyName = it }, label = { Text("Application / Key Identifier") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-                Spacer(Modifier.height(10.dp))
-                Button(onClick = { viewModel.generateApiKey(apiKeyName) }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900), modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp)); Text("Generate Research API Token", fontWeight = FontWeight.Bold)
-                }
-                generatedApiKey?.let { (rawSecret, entity) ->
-                    Spacer(Modifier.height(12.dp))
-                    Surface(color = Navy900, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(12.dp)) {
-                            Text("Save this token now; it is shown only once.", color = AmberAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text(rawSecret, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary)
-                                IconButton(onClick = { clipboardManager.setText(AnnotatedString(rawSecret)) }) { Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TealAccent, modifier = Modifier.size(16.dp)) }
-                            }
-                            Text("Key ID: ${entity.id.take(8)} • Rate limit: ${entity.rateLimitPerHour}/hour", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
-            }
-        }
+        item { ResearchCard("Research API — planned", "Live API credentials and HTTP endpoints are not available yet.") { Text("Use the authenticated dataset export above. No local token grants server access.") } }
 
-        item {
-            ResearchCard("API Reference", "Stable endpoints for authorized research applications.") {
-                ApiRow("GET", "/api/v1/lexicon", "Verified lexicon with dialect/POS filters")
-                ApiRow("GET", "/api/v1/sentences", "Parallel Khowar-English-Urdu sentences")
-                ApiRow("GET", "/api/v1/speech", "Speech corpus metadata and transcripts")
-                ApiRow("GET", "/api/v1/statistics", "Dataset statistics and coverage")
-                Spacer(Modifier.height(10.dp))
-                Surface(color = Navy900, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        "import requests\n\nheaders = {\"Authorization\": \"Bearer khowar_live_YOUR_KEY\"}\nr = requests.get(\n    \"https://api.khowar-dataset.org/api/v1/lexicon\",\n    headers=headers,\n    params={\"dialect\": \"Central\", \"pos\": \"NOUN\"}\n)\ndata = r.json()",
-                        fontFamily = FontFamily.Monospace, fontSize = 10.sp, color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.padding(10.dp)
-                    )
-                }
-            }
-        }
     }
 }
 

@@ -29,6 +29,13 @@ import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.ContributeTab
 import com.example.ui.viewmodel.KhowarViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ContributeScreen(
@@ -40,7 +47,12 @@ fun ContributeScreen(
     val currentUser by viewModel.currentUser.collectAsState()
     val dialects by viewModel.allDialects.collectAsState()
     val regions by viewModel.allRegions.collectAsState()
+    val formState = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
 
+    if (currentUser == null) {
+        Column(Modifier.padding(20.dp)) { Text("Sign in to save contributions under your account."); Button(onClick={viewModel.navigateTo(AppScreen.PROFILE)}) { Text("Sign in") } }
+        return
+    }
     Column(modifier = modifier.fillMaxSize()) {
         // Tab Row (Word, Sentence, Voice, Story, Knowledge, Image)
         Surface(
@@ -96,22 +108,22 @@ fun ContributeScreen(
         ) {
             when (activeTab) {
                 ContributeTab.WORD -> item {
-                    WordContributionForm(viewModel, dialects, regions, lang)
+                    formState.SaveableStateProvider(activeTab.name) { WordContributionForm(viewModel, dialects, regions, lang) }
                 }
                 ContributeTab.SENTENCE -> item {
-                    SentenceContributionForm(viewModel, dialects, regions, lang)
+                    formState.SaveableStateProvider(activeTab.name) { SentenceContributionForm(viewModel, dialects, regions, lang) }
                 }
                 ContributeTab.VOICE -> item {
-                    VoiceRecordingContributionForm(viewModel, dialects, regions, lang)
+                    formState.SaveableStateProvider(activeTab.name) { VoiceRecordingContributionForm(viewModel, dialects, regions, lang) }
                 }
                 ContributeTab.STORY -> item {
-                    StoryContributionForm(viewModel, dialects, regions, lang)
+                    formState.SaveableStateProvider(activeTab.name) { StoryContributionForm(viewModel, dialects, regions, lang) }
                 }
                 ContributeTab.KNOWLEDGE -> item {
-                    KnowledgeContributionForm(viewModel, dialects, regions, lang)
+                    formState.SaveableStateProvider(activeTab.name) { KnowledgeContributionForm(viewModel, dialects, regions, lang) }
                 }
                 ContributeTab.IMAGE -> item {
-                    ImageContributionForm(viewModel, regions, lang)
+                    formState.SaveableStateProvider(activeTab.name) { ImageContributionForm(viewModel, regions, lang) }
                 }
             }
         }
@@ -125,28 +137,28 @@ fun WordContributionForm(
     regions: List<Region>,
     lang: com.example.ui.i18n.AppLanguage
 ) {
-    var khowarWord by remember { mutableStateOf("") }
-    var transliteration by remember { mutableStateOf("") }
-    var englishMeaning by remember { mutableStateOf("") }
-    var urduMeaning by remember { mutableStateOf("") }
-    var partOfSpeech by remember { mutableStateOf(PartOfSpeech.NOUN) }
-    var grammaticalCategory by remember { mutableStateOf("") }
-    var definition by remember { mutableStateOf("") }
-    var pronunciation by remember { mutableStateOf("") }
-    var exampleKhowar by remember { mutableStateOf("") }
-    var exampleEnglish by remember { mutableStateOf("") }
-    var selectedDialect by remember { mutableStateOf("Central") }
-    var selectedRegion by remember { mutableStateOf("Chitral Upper") }
-    var source by remember { mutableStateOf("Native Speaker Knowledge") }
-    var isConsentChecked by remember { mutableStateOf(false) }
-    var isAiAssisted by remember { mutableStateOf(false) }
+    var khowarWord by rememberSaveable { mutableStateOf("") }
+    var transliteration by rememberSaveable { mutableStateOf("") }
+    var englishMeaning by rememberSaveable { mutableStateOf("") }
+    var urduMeaning by rememberSaveable { mutableStateOf("") }
+    var partOfSpeech by rememberSaveable { mutableStateOf(PartOfSpeech.NOUN) }
+    var grammaticalCategory by rememberSaveable { mutableStateOf("") }
+    var definition by rememberSaveable { mutableStateOf("") }
+    var pronunciation by rememberSaveable { mutableStateOf("") }
+    var exampleKhowar by rememberSaveable { mutableStateOf("") }
+    var exampleEnglish by rememberSaveable { mutableStateOf("") }
+    var selectedDialect by rememberSaveable { mutableStateOf("Central") }
+    var selectedRegion by rememberSaveable { mutableStateOf("Chitral Upper") }
+    var source by rememberSaveable { mutableStateOf("Native Speaker Knowledge") }
+    var isConsentChecked by rememberSaveable { mutableStateOf(false) }
+    var isAiAssisted by rememberSaveable { mutableStateOf(false) }
 
     val duplicates by viewModel.detectedDuplicates.collectAsState()
     val aiSuggestion by viewModel.aiSuggestion.collectAsState()
 
-    var showPosMenu by remember { mutableStateOf(false) }
-    var showDialectMenu by remember { mutableStateOf(false) }
-    var showRegionMenu by remember { mutableStateOf(false) }
+    var showPosMenu by rememberSaveable { mutableStateOf(false) }
+    var showDialectMenu by rememberSaveable { mutableStateOf(false) }
+    var showRegionMenu by rememberSaveable { mutableStateOf(false) }
 
     // Trigger duplicate & AI assist check
     LaunchedEffect(khowarWord, englishMeaning) {
@@ -371,7 +383,7 @@ fun WordContributionForm(
                         isConsentChecked = false
                     }
                 },
-                enabled = khowarWord.isNotBlank() && englishMeaning.isNotBlank() && isConsentChecked,
+                enabled = khowarWord.isNotBlank() && (englishMeaning.isNotBlank() || urduMeaning.isNotBlank()) && isConsentChecked,
                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
@@ -393,15 +405,15 @@ fun SentenceContributionForm(
     regions: List<Region>,
     lang: com.example.ui.i18n.AppLanguage
 ) {
-    var khowarText by remember { mutableStateOf("") }
-    var transliteration by remember { mutableStateOf("") }
-    var englishTranslation by remember { mutableStateOf("") }
-    var urduTranslation by remember { mutableStateOf("") }
-    var context by remember { mutableStateOf("Everyday Conversation") }
-    var selectedDialect by remember { mutableStateOf("Central") }
-    var selectedRegion by remember { mutableStateOf("Chitral Lower") }
-    var source by remember { mutableStateOf("Fieldwork / Native Speaker") }
-    var isConsentChecked by remember { mutableStateOf(false) }
+    var khowarText by rememberSaveable { mutableStateOf("") }
+    var transliteration by rememberSaveable { mutableStateOf("") }
+    var englishTranslation by rememberSaveable { mutableStateOf("") }
+    var urduTranslation by rememberSaveable { mutableStateOf("") }
+    var context by rememberSaveable { mutableStateOf("Everyday Conversation") }
+    var selectedDialect by rememberSaveable { mutableStateOf("Central") }
+    var selectedRegion by rememberSaveable { mutableStateOf("Chitral Lower") }
+    var source by rememberSaveable { mutableStateOf("Fieldwork / Native Speaker") }
+    var isConsentChecked by rememberSaveable { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -485,7 +497,7 @@ fun SentenceContributionForm(
                         isConsentChecked = false
                     }
                 },
-                enabled = khowarText.isNotBlank() && englishTranslation.isNotBlank() && isConsentChecked,
+                enabled = khowarText.isNotBlank() && (englishTranslation.isNotBlank() || urduTranslation.isNotBlank()) && isConsentChecked,
                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
@@ -508,18 +520,24 @@ fun VoiceRecordingContributionForm(
     val isRecording by viewModel.audioRecorder.isRecording.collectAsState()
     val isPlaying by viewModel.audioPlayer.isPlaying.collectAsState()
     var recordedAudioPath by remember { mutableStateOf<String?>(null) }
-    var recordedDurationSec by remember { mutableStateOf(0.0) }
-    var elapsedDisplay by remember { mutableStateOf(0.0) }
+    var recordedDurationSec by rememberSaveable { mutableStateOf(0.0) }
+    var elapsedDisplay by rememberSaveable { mutableStateOf(0.0) }
 
-    var transcriptKhowar by remember { mutableStateOf("") }
-    var englishTranslation by remember { mutableStateOf("") }
-    var speakerAgeGroup by remember { mutableStateOf("Adult (26-50)") }
-    var speakerGender by remember { mutableStateOf("Unspecified") }
-    var isNativeSpeaker by remember { mutableStateOf(true) }
-    var selectedDialect by remember { mutableStateOf("Central") }
-    var selectedRegion by remember { mutableStateOf("Chitral") }
-    var isConsentChecked by remember { mutableStateOf(false) }
+    var transcriptKhowar by rememberSaveable { mutableStateOf("") }
+    var englishTranslation by rememberSaveable { mutableStateOf("") }
+    var speakerAgeGroup by rememberSaveable { mutableStateOf("Adult (26-50)") }
+    var speakerGender by rememberSaveable { mutableStateOf("Unspecified") }
+    var isNativeSpeaker by rememberSaveable { mutableStateOf(true) }
+    var selectedDialect by rememberSaveable { mutableStateOf("Central") }
+    var selectedRegion by rememberSaveable { mutableStateOf("Chitral") }
+    var isConsentChecked by rememberSaveable { mutableStateOf(false) }
 
+    var permissionDenied by rememberSaveable { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        permissionDenied = !granted
+        if (granted) recordedAudioPath = viewModel.audioRecorder.startRecording()
+    }
+    DisposableEffect(Unit) { onDispose { if (viewModel.audioRecorder.isRecording.value) viewModel.audioRecorder.cancelRecording() } }
     // Live timer when recording
     LaunchedEffect(isRecording) {
         if (isRecording) {
@@ -538,6 +556,7 @@ fun VoiceRecordingContributionForm(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            if (permissionDenied) Text("Microphone permission is needed to record audio.", color=MaterialTheme.colorScheme.error)
             Text("Speech Corpus Voice Recording", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = AmberAccent)
             Text(
                 text = "Capture authentic spoken Khowar for ASR/TTS and phonological research.",
@@ -579,10 +598,7 @@ fun VoiceRecordingContributionForm(
                         if (!isRecording && recordedAudioPath == null) {
                             Button(
                                 onClick = {
-                                    val path = viewModel.audioRecorder.startRecording()
-                                    if (path != null) {
-                                        recordedAudioPath = path
-                                    }
+                                    permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = CoralAccent),
                                 shape = CircleShape,
@@ -692,7 +708,7 @@ fun VoiceRecordingContributionForm(
                         isConsentChecked = false
                     }
                 },
-                enabled = recordedAudioPath != null && transcriptKhowar.isNotBlank() && isConsentChecked,
+                enabled = !isRecording && recordedDurationSec > 0 && recordedAudioPath != null && transcriptKhowar.isNotBlank() && isConsentChecked,
                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900),
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
@@ -712,12 +728,12 @@ fun StoryContributionForm(
     regions: List<Region>,
     lang: com.example.ui.i18n.AppLanguage
 ) {
-    var title by remember { mutableStateOf("") }
-    var khowarText by remember { mutableStateOf("") }
-    var englishTranslation by remember { mutableStateOf("") }
-    var authorOrSpeaker by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(StoryCategory.FOLK_TALE) }
-    var isConsentChecked by remember { mutableStateOf(false) }
+    var title by rememberSaveable { mutableStateOf("") }
+    var khowarText by rememberSaveable { mutableStateOf("") }
+    var englishTranslation by rememberSaveable { mutableStateOf("") }
+    var authorOrSpeaker by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf(StoryCategory.FOLK_TALE) }
+    var isConsentChecked by rememberSaveable { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -791,11 +807,11 @@ fun KnowledgeContributionForm(
     regions: List<Region>,
     lang: com.example.ui.i18n.AppLanguage
 ) {
-    var type by remember { mutableStateOf(KnowledgeType.PROVERB) }
-    var title by remember { mutableStateOf("") }
-    var khowarContent by remember { mutableStateOf("") }
-    var explanation by remember { mutableStateOf("") }
-    var isConsentChecked by remember { mutableStateOf(false) }
+    var type by rememberSaveable { mutableStateOf(KnowledgeType.PROVERB) }
+    var title by rememberSaveable { mutableStateOf("") }
+    var khowarContent by rememberSaveable { mutableStateOf("") }
+    var explanation by rememberSaveable { mutableStateOf("") }
+    var isConsentChecked by rememberSaveable { mutableStateOf(false) }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -868,12 +884,37 @@ fun ImageContributionForm(
     regions: List<Region>,
     lang: com.example.ui.i18n.AppLanguage
 ) {
-    var title by remember { mutableStateOf("") }
-    var khowarLabel by remember { mutableStateOf("") }
-    var englishLabel by remember { mutableStateOf("") }
-    var culturalContext by remember { mutableStateOf("") }
-    var isConsentChecked by remember { mutableStateOf(false) }
+    var title by rememberSaveable { mutableStateOf("") }
+    var khowarLabel by rememberSaveable { mutableStateOf("") }
+    var englishLabel by rememberSaveable { mutableStateOf("") }
+    var culturalContext by rememberSaveable { mutableStateOf("") }
+    var isConsentChecked by rememberSaveable { mutableStateOf(false) }
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var imagePath by rememberSaveable { mutableStateOf("") }
+    var imageError by remember { mutableStateOf("") }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if(uri != null) scope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    val mime = context.contentResolver.getType(uri).orEmpty()
+                    require(mime.startsWith("image/")) { "Select an image." }
+                    val extension = android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(mime) ?: error("Unsupported image type")
+                    val folder = java.io.File(context.filesDir,"images").apply { mkdirs() }
+                    val file = java.io.File(folder,"${java.util.UUID.randomUUID()}.$extension")
+                    try {
+                        context.contentResolver.openInputStream(uri)!!.use { input -> file.outputStream().use { output ->
+                            val buffer=ByteArray(8192); var total=0
+                            while(true) { val count=input.read(buffer); if(count<0)break;total+=count;require(total<15*1024*1024){"Image must be smaller than 15 MB"};output.write(buffer,0,count) }
+                        } }
+                        require(file.length()>0){"Image is empty"}
+                        file.absolutePath
+                    } catch(e:Exception) { file.delete();throw e }
+                }
+            }.onSuccess { imagePath=it;imageError="" }.onFailure { imageError=it.message.orEmpty() }
+        }
+    }
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(14.dp),
@@ -881,6 +922,9 @@ fun ImageContributionForm(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            Button(onClick={picker.launch("image/*")}) { Text(if(imagePath.isEmpty()) "Select image" else "Change image") }
+            if(imagePath.isNotEmpty()) coil.compose.AsyncImage(model=java.io.File(imagePath),contentDescription="Selected cultural object",modifier=Modifier.fillMaxWidth().height(180.dp))
+            if(imageError.isNotEmpty()) Text(imageError,color=MaterialTheme.colorScheme.error)
             Text("Visual Artifact / Cultural Object Labeling", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TealAccent)
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -930,14 +974,16 @@ fun ImageContributionForm(
 
             Button(
                 onClick = {
-                    viewModel.submitImage(title, culturalContext, khowarLabel, englishLabel, culturalContext, "local_artifact_ref", "Contributor", "Chitral", "CC-BY-SA-4.0")
+                    viewModel.submitImage(title, culturalContext, khowarLabel, englishLabel, culturalContext, imagePath, "Contributor", "Chitral", "CC-BY-SA-4.0") {
                     title = ""
                     khowarLabel = ""
                     englishLabel = ""
                     culturalContext = ""
                     isConsentChecked = false
+                    imagePath = ""
+                    }
                 },
-                enabled = title.isNotBlank() && khowarLabel.isNotBlank() && isConsentChecked,
+                enabled = imagePath.isNotEmpty() && title.isNotBlank() && khowarLabel.isNotBlank() && isConsentChecked,
                 colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900),
                 modifier = Modifier.fillMaxWidth()
             ) {

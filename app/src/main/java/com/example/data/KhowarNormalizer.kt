@@ -21,12 +21,9 @@ object KhowarNormalizer {
         text = text
             .replace('\u064A', '\u06CC')
             .replace('\u0649', '\u06CC')
-            .replace('\u06D2', '\u06CC')
             .replace('\u0643', '\u06A9')
             .replace('\u0629', '\u06C1')
             .replace('\u0647', '\u06C1')
-            .replace('\u06BE', '\u06C1')
-            .replace('\u0624', '\u0648')
 
         // Arabic diacritics/tashkeel.
         text = text.replace(Regex("[\\u064B-\\u0652\\u0670\\u06DF-\\u06E8\\u06EA-\\u06ED]"), "")
@@ -68,7 +65,7 @@ object KhowarNormalizer {
     fun generateTransliterationHint(input: String): String {
         val normalized = normalizeKhowarText(input)
         if (normalized.isBlank()) return ""
-        if (normalized.all { it.isLetterOrDigit() || it.isWhitespace() || it in "' -" && it.code < 128 }) {
+        if (normalized.all { it.code < 128 && (it.isLetterOrDigit() || it.isWhitespace() || it in "' -") }) {
             return normalizeTransliteration(normalized)
         }
 
@@ -87,7 +84,7 @@ object KhowarNormalizer {
                 append(
                     when {
                         ch in map -> map.getValue(ch)
-                        ch.isLetterOrDigit() || ch in "' -" && ch.code < 128 -> ch.lowercaseChar()
+                        ch.code < 128 && (ch.isLetterOrDigit() || ch in "' -") -> ch.lowercaseChar()
                         ch.isWhitespace() -> ' '
                         else -> ' '
                     }

@@ -213,6 +213,8 @@ private fun roleDescription(role: UserRole): String = when (role) {
     UserRole.EXPERT -> "Linguistic and cultural expert verification"
     UserRole.RESEARCHER -> "Research access, exports and API keys"
     UserRole.MODERATOR -> "Community moderation and reports"
+    UserRole.DATA_STEWARD -> "Research quality and metadata"
+    UserRole.AUDITOR -> "Audit history"
     UserRole.ADMIN -> "Platform governance and administration"
     UserRole.SUPER_ADMIN -> "Full platform authority"
 }

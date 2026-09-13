@@ -13,11 +13,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [User::class, Region::class, Dialect::class, License::class, LexiconEntry::class, SentenceEntry::class, SpeechRecording::class, StoryEntry::class, ImageEntry::class, KnowledgeEntry::class, ConsentRecord::class, ValidationReview::class, DatasetVersion::class, ApiKey::class, AuditLog::class, ModerationReport::class],
-    version = 2,
-    exportSchema = false
+    entities = [User::class, Region::class, Dialect::class, License::class, LexiconEntry::class, SentenceEntry::class, SpeechRecording::class, StoryEntry::class, ImageEntry::class, KnowledgeEntry::class, ConsentRecord::class, ValidationReview::class, DatasetVersion::class, ApiKey::class, AuditLog::class, ModerationReport::class, CloudOperation::class],
+    version = 3,
+    exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun cloudDao(): CloudDao
     abstract fun lexiconDao(): LexiconDao
     abstract fun sentenceDao(): SentenceDao
     abstract fun speechDao(): SpeechDao
@@ -52,6 +53,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE TABLE IF NOT EXISTS cloud_outbox (`key` TEXT NOT NULL, collection TEXT NOT NULL, recordId TEXT NOT NULL, ownerUid TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL, error TEXT NOT NULL, updatedAt INTEGER NOT NULL, PRIMARY KEY(`key`))")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_lexicon_entries_status_createdAt ON lexicon_entries(status, createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_lexicon_entries_contributorId ON lexicon_entries(contributorId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sentences_status_createdAt ON sentences(status, createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_sentences_contributorId ON sentences(contributorId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_speech_recordings_status_createdAt ON speech_recordings(status, createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_speech_recordings_contributorId ON speech_recordings(contributorId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_stories_status_createdAt ON stories(status, createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_stories_contributorId ON stories(contributorId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_images_status_createdAt ON images(status, createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_images_contributorId ON images(contributorId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_status_createdAt ON knowledge(status, createdAt)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_knowledge_contributorId ON knowledge(contributorId)")
+                // Old local-only credentials are not usable server credentials.
+                db.execSQL("DELETE FROM api_keys")
+            }
+        }
+
         @Volatile private var INSTANCE: AppDatabase? = null
 
         fun getDatabase(context: Context, scope: CoroutineScope): AppDatabase = INSTANCE ?: synchronized(this) {
@@ -60,7 +81,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "khowar_dataset.db"
             )
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .addCallback(AppDatabaseCallback(scope))
                 .build()
             INSTANCE = instance

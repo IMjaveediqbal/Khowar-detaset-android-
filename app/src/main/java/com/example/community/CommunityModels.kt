@@ -44,8 +44,8 @@ internal fun Map<String, Any?>.asCommunityPost(id: String): CommunityPost = Comm
     linkedRecordId = this["linkedRecordId"] as? String,
     answerCount = (this["answerCount"] as? Number)?.toLong() ?: 0L,
     voteScore = (this["voteScore"] as? Number)?.toLong() ?: 0L,
-    createdAt = (this["createdAt"] as? Timestamp)?.toDate(),
-    updatedAt = (this["updatedAt"] as? Timestamp)?.toDate()
+    createdAt = (this["createdAt"] as? Timestamp)?.toDate() ?: (this["createdAt"] as? Number)?.let { Date(it.toLong()) },
+    updatedAt = (this["updatedAt"] as? Timestamp)?.toDate() ?: (this["updatedAt"] as? Number)?.let { Date(it.toLong()) }
 )
 
 internal fun Map<String, Any?>.asCommunityComment(id: String): CommunityComment = CommunityComment(
@@ -55,5 +55,5 @@ internal fun Map<String, Any?>.asCommunityComment(id: String): CommunityComment 
     authorName = this["authorName"] as? String ?: "Community member",
     body = this["body"] as? String ?: "",
     accepted = this["accepted"] as? Boolean ?: false,
-    createdAt = (this["createdAt"] as? Timestamp)?.toDate()
+    createdAt = (this["createdAt"] as? Timestamp)?.toDate() ?: (this["createdAt"] as? Number)?.let { Date(it.toLong()) }
 )

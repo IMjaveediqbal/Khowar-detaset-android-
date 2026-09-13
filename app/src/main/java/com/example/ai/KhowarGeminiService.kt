@@ -11,8 +11,7 @@ import com.google.firebase.ai.type.GenerativeBackend
 class KhowarGeminiService(
     private val modelName: String = "gemini-3.7-flash"
 ) {
-    private val model = Firebase.ai(backend = GenerativeBackend.googleAI())
-        .generativeModel(modelName)
+    private val model by lazy { Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(modelName) }
 
     suspend fun suggestForLexicon(
         khowarWord: String,
