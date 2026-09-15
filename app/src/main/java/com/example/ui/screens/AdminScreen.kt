@@ -1,7 +1,6 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,13 +9,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,6 +23,8 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.model.User
 import com.example.data.model.UserRole
 import com.example.security.RbacPolicy
+import com.example.security.RbacPermission
+import com.example.security.StaffInvitationService
 import com.example.ui.components.EmptyStateView
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.KhowarViewModel
@@ -35,6 +36,7 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     val auditLogs by viewModel.allAuditLogs.collectAsState()
     val versions by viewModel.datasetVersions.collectAsState()
     var showReleaseDialog by remember { mutableStateOf(false) }
+    var showStaffInviteDialog by remember { mutableStateOf(false) }
     var selectedUserForRoleChange by remember { mutableStateOf<User?>(null) }
     var adminTab by remember { mutableStateOf("AUDIT") }
 
@@ -57,7 +59,7 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                         }
                         Text("RBAC, user provisioning, dataset releases and audit logs", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (RbacPolicy.can(currentUser?.role, com.example.security.RbacPermission.RELEASE_DATASET)) {
+                    if (RbacPolicy.can(currentUser?.role, RbacPermission.RELEASE_DATASET)) {
                         Button(onClick = { showReleaseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) {
                             Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
@@ -77,13 +79,25 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
         LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when (adminTab) {
                 "AUDIT" -> if (auditLogs.isEmpty()) item { EmptyStateView(title = "No audit entries yet", subtitle = "System actions are logged immutably here.") } else items(auditLogs) { log -> AuditLogItemCard(log) }
-                "USERS" -> items(users) { u -> UserRowCard(user = u, onRoleChange = { selectedUserForRoleChange = u }) }
+                "USERS" -> {
+                    if (RbacPolicy.can(currentUser?.role, RbacPermission.MANAGE_USERS)) {
+                        item {
+                            Button(onClick = { showStaffInviteDialog = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900)) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Invite Staff Account", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    items(users) { u -> UserRowCard(user = u, onRoleChange = { selectedUserForRoleChange = u }) }
+                }
                 "RELEASES" -> if (versions.isEmpty()) item { EmptyStateView(title = "No Dataset Releases Published Yet", subtitle = "Publish version v1.0.0 to create a formal citable snapshot of the dataset.", actionText = "Create Dataset Release", onAction = { showReleaseDialog = true }) } else items(versions) { v -> DatasetVersionCard(v) }
             }
         }
     }
 
     if (showReleaseDialog) CreateReleaseDialog(viewModel = viewModel, onDismiss = { showReleaseDialog = false })
+    if (showStaffInviteDialog) StaffInvitationDialog(onDismiss = { showStaffInviteDialog = false })
     selectedUserForRoleChange?.let { targetUser ->
         RoleChangeDialog(
             targetUser = targetUser,
@@ -172,6 +186,63 @@ fun CreateReleaseDialog(viewModel: KhowarViewModel, onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun StaffInvitationDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val service = remember { StaffInvitationService(context) }
+    var email by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var role by remember { mutableStateOf(UserRole.VALIDATOR) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
+        Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text("Invite Staff Account", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("The staff member will receive a Firebase password-reset email and use the normal login screen. No permanent password is shown to the administrator.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Staff name") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Email address") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Role", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                UserRole.values().filter { it in setOf(UserRole.VALIDATOR, UserRole.EXPERT, UserRole.RESEARCHER, UserRole.MODERATOR, UserRole.DATA_STEWARD, UserRole.AUDITOR, UserRole.ADMIN) }.forEach { candidate ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable(enabled = !busy) { role = candidate }.padding(vertical = 3.dp)) {
+                        RadioButton(selected = role == candidate, onClick = null, enabled = !busy)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(candidate.name, fontSize = 12.sp)
+                    }
+                }
+                message?.let {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(it, fontSize = 11.sp, color = if (it.startsWith("Invitation sent")) EmeraldGreen else MaterialTheme.colorScheme.error)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(enabled = !busy, onClick = onDismiss) { Text("Cancel") }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(enabled = !busy, onClick = {
+                        busy = true
+                        message = null
+                        LaunchedEffect(Unit) { }
+                    }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900)) {
+                        if (busy) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("Send Invitation", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(busy) {
+        if (!busy) return@LaunchedEffect
+        service.invite(email, name, role)
+            .onSuccess { message = "Invitation sent to ${email.trim()}" }
+            .onFailure { message = it.message ?: "Invitation failed." }
+        busy = false
     }
 }
 
