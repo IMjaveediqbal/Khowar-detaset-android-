@@ -19,15 +19,18 @@ Privileged roles are provisioned by an authorized administrator:
 - MODERATOR
 - DATA_STEWARD
 - AUDITOR
+- ADMIN (SUPER_ADMIN only)
 
-Recommended flow:
+The implemented flow is:
 
-`Admin invitation → user sets password → common login → trusted role loaded → staff workspace`
+`Admin → trusted provisionStaffAccount function → staff account + role → password-reset email → common login → trusted role loaded → staff workspace`
 
-The administrator should not need to know the staff member's permanent password.
+The Firebase Admin SDK creates the account without an administrator-supplied password. The Android client then requests Firebase's standard password-reset email for the staff email. The administrator never receives or stores the permanent password.
+
+If the reset email is not received, the account remains provisioned and an administrator can provide a password-reset action again rather than recreating the account.
 
 ## Administrative account
-`SUPER_ADMIN` provisions `ADMIN` accounts. `ADMIN` can provision operational staff roles but cannot grant `ADMIN` or `SUPER_ADMIN`. `SUPER_ADMIN` is the only role that can grant `SUPER_ADMIN`.
+`SUPER_ADMIN` provisions `ADMIN` accounts. `ADMIN` can provision operational staff roles but cannot grant `ADMIN` or `SUPER_ADMIN`. `SUPER_ADMIN` is the only role that can grant `SUPER_ADMIN` through the normal role-management path.
 
 ## One login
 There is one authentication entry point for all authenticated users. A role changes authorization and workspace after login; it does not create a separate login system.
@@ -35,12 +38,13 @@ There is one authentication entry point for all authenticated users. A role chan
 ## Security requirements
 1. Public registration always produces `CONTRIBUTOR`.
 2. Client input cannot select or escalate a privileged role.
-3. Backend role assignment verifies the acting administrator and target account.
-4. Role changes update trusted authorization state and are audited.
-5. Temporary credentials must be changed on first use.
-6. Permanent passwords are never displayed to administrators.
+3. Staff account creation and role assignment are authorized by the backend, not by Android UI state.
+4. Role changes and staff provisioning are audited.
+5. Permanent passwords are never generated, displayed, or stored by administrators.
+6. Staff establish their password through Firebase's password-reset flow.
 7. API access is an authorization capability on the existing account, not a second login.
 8. UI restrictions are advisory; Firebase Functions and Firestore rules are authoritative.
+9. If provisioning succeeds but the reset-email request fails, the account is retained so the invitation can be retried safely.
 
-## Recommended future implementation
-Add an explicit staff-invitation/provisioning flow to the Admin workspace. It should create or invite a Firebase Authentication identity, assign the requested role only after server-side authorization, and record an audit event. Do not implement staff creation by asking an administrator to enter or store the staff member's permanent password.
+## Implementation boundary
+`functions/src/staffProvisioning.ts` contains the trusted account-provisioning callable. `functions/src/index2.ts` exposes it alongside the existing Functions exports. The Android `StaffInvitationService` calls that trusted endpoint and then requests the standard Firebase password-reset email without replacing the administrator's session.
