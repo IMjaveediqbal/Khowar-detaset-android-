@@ -1,5 +1,6 @@
 package com.example.security
 
+import android.content.Context
 import com.example.data.model.UserRole
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.functions.FirebaseFunctions
@@ -10,7 +11,7 @@ import kotlinx.coroutines.tasks.await
  * Account creation and privileged role assignment happen in Firebase Functions.
  * The administrator never creates, receives, or stores a permanent password.
  */
-class StaffInvitationService {
+class StaffInvitationService(@Suppress("UNUSED_PARAMETER") context: Context) {
     private val auth = FirebaseAuth.getInstance()
     private val functions = FirebaseFunctions.getInstance()
 
