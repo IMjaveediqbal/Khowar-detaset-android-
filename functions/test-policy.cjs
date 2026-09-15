@@ -1,11 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {canChangeRole,canAdvance,validatePayload}=require('./lib/policy');
+const {canChangeRole,canProvisionStaff,canAdvance,validatePayload}=require('./lib/policy');
 test('administrators cannot demote superior or peer accounts',()=>{
  assert.equal(canChangeRole('ADMIN','SUPER_ADMIN','CONTRIBUTOR'),false);
  assert.equal(canChangeRole('ADMIN','ADMIN','CONTRIBUTOR'),false);
  assert.equal(canChangeRole('ADMIN','CONTRIBUTOR','EXPERT'),true);
  assert.equal(canChangeRole('CONTRIBUTOR','CONTRIBUTOR','ADMIN'),false);
+});
+test('staff provisioning is admin-controlled',()=>{
+ for(const role of ['VALIDATOR','EXPERT','RESEARCHER','MODERATOR','DATA_STEWARD','AUDITOR']) assert.equal(canProvisionStaff('ADMIN',role),true);
+ assert.equal(canProvisionStaff('ADMIN','ADMIN'),false);
+ assert.equal(canProvisionStaff('ADMIN','SUPER_ADMIN'),false);
+ assert.equal(canProvisionStaff('SUPER_ADMIN','ADMIN'),true);
+ assert.equal(canProvisionStaff('SUPER_ADMIN','SUPER_ADMIN'),false);
+ assert.equal(canProvisionStaff('CONTRIBUTOR','EXPERT'),false);
 });
 test('expert verification requires expert authority and consecutive stage',()=>{
  assert.equal(canAdvance('VALIDATOR','COMMUNITY_VERIFIED','EXPERT_VERIFIED'),false);
