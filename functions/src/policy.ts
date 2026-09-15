@@ -1,11 +1,15 @@
 export const roles = ["VISITOR", "CONTRIBUTOR", "VALIDATOR", "EXPERT", "RESEARCHER", "MODERATOR", "DATA_STEWARD", "AUDITOR", "ADMIN", "SUPER_ADMIN"] as const;
 export type Role = typeof roles[number];
+export const staffRoles: Role[] = ["VALIDATOR", "EXPERT", "RESEARCHER", "MODERATOR", "DATA_STEWARD", "AUDITOR", "ADMIN"];
 export const reviewers: Role[] = ["VALIDATOR", "EXPERT", "DATA_STEWARD", "ADMIN", "SUPER_ADMIN"];
 export const researchers: Role[] = ["EXPERT", "RESEARCHER", "DATA_STEWARD", "ADMIN", "SUPER_ADMIN"];
 export const stages = ["RAW", "QUALITY_CHECKED", "COMMUNITY_VERIFIED", "EXPERT_VERIFIED", "RESEARCH_READY", "RELEASED"] as const;
 export const rank: Record<Role, number> = { VISITOR: 0, CONTRIBUTOR: 10, VALIDATOR: 20, EXPERT: 30, RESEARCHER: 30, MODERATOR: 30, DATA_STEWARD: 40, AUDITOR: 40, ADMIN: 80, SUPER_ADMIN: 100 };
 export function canChangeRole(actor: Role, previous: Role, next: Role): boolean {
   return next !== "VISITOR" && (actor === "SUPER_ADMIN" || (actor === "ADMIN" && rank[previous] < rank.ADMIN && rank[next] < rank.ADMIN));
+}
+export function canProvisionStaff(actor: Role, next: Role): boolean {
+  return staffRoles.includes(next) && canChangeRole(actor, "CONTRIBUTOR", next);
 }
 export function canAdvance(role: Role, current: string, next: string): boolean {
   const index = stages.indexOf(current as typeof stages[number]);
