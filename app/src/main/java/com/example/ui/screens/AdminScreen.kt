@@ -24,11 +24,9 @@ import androidx.compose.ui.window.Dialog
 import com.example.data.model.User
 import com.example.data.model.UserRole
 import com.example.security.RbacPolicy
-import com.example.security.RbacService
 import com.example.ui.components.EmptyStateView
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.KhowarViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
@@ -39,8 +37,6 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     var showReleaseDialog by remember { mutableStateOf(false) }
     var selectedUserForRoleChange by remember { mutableStateOf<User?>(null) }
     var adminTab by remember { mutableStateOf("AUDIT") }
-    val scope = rememberCoroutineScope()
-    val rbac = remember { RbacService() }
 
     if (!RbacPolicy.isAdministrative(currentUser?.role)) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -93,9 +89,7 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
             targetUser = targetUser,
             currentRole = currentUser?.role,
             onRoleSelected = { role ->
-                scope.launch {
-                    rbac.setUserRole(targetEmail = targetUser.email, role = role)
-                }
+                viewModel.updateUserRole(targetUser.id, role)
                 selectedUserForRoleChange = null
             },
             onDismiss = { selectedUserForRoleChange = null }
