@@ -33,17 +33,22 @@ export function validatePayload(collection: string, data: Record<string, unknown
     else if(boolean.has(key)) { if(typeof value !== 'boolean')return `${key} must be boolean`; }
     else if(typeof value !== 'string')return `${key} must be text`;
   }
+  // Collection is intentionally stored as RAW first. Missing linguistic metadata is valid
+  // at collection time; validators/experts enrich it later instead of losing native data.
   const textField: Record<string, string> = { lexicon: "khowarWord", sentences: "khowarText", speech: "transcriptKhowar", stories: "khowarText", knowledge: "khowarContent", images: "khowarLabel" };
-  const text = data[textField[collection]];
-  if (typeof text !== "string" || !text.trim() || text.length > (collection === "lexicon" ? 500 : 100000)) return "Invalid Khowar text";
-  if (["lexicon", "sentences"].includes(collection)) {
-    const en = data[collection === "lexicon" ? "englishMeaning" : "englishTranslation"];
-    const ur = data[collection === "lexicon" ? "urduMeaning" : "urduTranslation"];
-    if (![en, ur].some(x => typeof x === "string" && x.trim())) return "A translation is required";
+  if (collection !== "speech") {
+    const text = data[textField[collection]];
+    if (typeof text !== "string" || !text.trim() || text.length > (collection === "lexicon" ? 500 : 100000)) return "Invalid Khowar text";
   }
+  if (collection === "speech") {
+    const mediaPath = data.mediaPath;
+    if (typeof mediaPath !== "string" || !mediaPath.trim()) return "Audio media is required";
+  }
+  if (!["speech"].includes(collection) && Object.values(data).some(v => typeof v === 'string' && v.length > 100000)) return "Text too long";
+  if (collection === "lexicon" && typeof data.khowarWord === "string" && data.khowarWord.length > 500) return "Khowar word is too long";
+  if (collection === "sentences" && typeof data.khowarText === "string" && data.khowarText.length > 100000) return "Sentence is too long";
+  if (collection === "speech" && (typeof data.durationSeconds !== "number" || !Number.isFinite(data.durationSeconds) || data.durationSeconds <= 0 || data.durationSeconds > 3600)) return "Invalid audio duration";
   if (!['CC-BY-SA-4.0', 'CC-BY-4.0', 'CC-0', 'RESEARCH_ONLY'].includes(String(data.licenseId))) return "Invalid license";
   for (const key of ['dialectId', 'regionId']) if (typeof data[key] !== 'string' || !(data[key] as string).trim()) return `${key} required`;
-  if (collection === "speech" && (typeof data.durationSeconds !== "number" || !Number.isFinite(data.durationSeconds) || data.durationSeconds <= 0 || data.durationSeconds > 3600)) return "Invalid audio duration";
-  if (Object.values(data).some(v => typeof v === 'string' && v.length > 100000)) return "Text too long";
   return null;
 }
