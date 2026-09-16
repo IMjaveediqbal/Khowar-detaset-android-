@@ -66,19 +66,13 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                             Spacer(Modifier.width(8.dp))
                             Text(if (create) "Create an account" else "Sign in", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
-                        Text(
-                            if (create) "Create a new account and start collecting Khowar data."
-                            else "Sign in with your email and password.",
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text(if (create) "Create a new account and start collecting Khowar data." else "Sign in with your email and password.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
             item { OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
             item { OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth()) }
-            if (create) {
-                item { OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-            }
+            if (create) item { OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
             item {
                 Button(onClick = { viewModel.authenticate(email, password, create, name); password = "" }, enabled = email.isNotBlank() && password.isNotEmpty() && (!create || (password.length >= 8 && name.trim().length >= 2)), modifier = Modifier.fillMaxWidth()) {
                     Text(if (create) "Create Account" else "Sign in")
@@ -99,7 +93,10 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                             }
                         }
                         HorizontalDivider()
-                        RoleSummary(user!!.role)
+                        if (user!!.role == UserRole.CONTRIBUTOR) {
+                            Text("Contributor", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            Text("You can collect and submit Khowar data. Validation and publication are handled separately.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -158,64 +155,30 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     }
 
     if (user != null && mustChangePassword) {
-        AlertDialog(
-            onDismissRequest = { },
-            title = { Text("Set a new password") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("This project account was created by an administrator. You must replace the temporary password before continuing.")
-                    OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = !passwordChangeBusy)
-                    OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = !passwordChangeBusy)
-                    if (passwordChangeError != null) Text(passwordChangeError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                    Text("Use at least 12 characters.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !passwordChangeBusy && newPassword.length >= 12 && newPassword == confirmPassword,
-                    onClick = {
-                        passwordChangeBusy = true
-                        passwordChangeError = null
-                        scope.launch {
-                            val result = runCatching {
-                                val account = FirebaseAuth.getInstance().currentUser ?: error("You are signed out.")
-                                account.updatePassword(newPassword).await()
-                                RbacRemoteService().completeManagedPasswordChange().getOrThrow()
-                            }
-                            result.onSuccess {
-                                mustChangePassword = false
-                                newPassword = ""
-                                confirmPassword = ""
-                            }.onFailure { error ->
-                                passwordChangeError = error.message ?: "Password change failed. Please try again."
-                            }
-                            passwordChangeBusy = false
-                        }
+        AlertDialog(onDismissRequest = { }, title = { Text("Set a new password") }, text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("This project account was created by an administrator. You must replace the temporary password before continuing.")
+                OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = !passwordChangeBusy)
+                OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = !passwordChangeBusy)
+                if (passwordChangeError != null) Text(passwordChangeError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Text("Use at least 12 characters.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }, confirmButton = {
+            TextButton(enabled = !passwordChangeBusy && newPassword.length >= 12 && newPassword == confirmPassword, onClick = {
+                passwordChangeBusy = true
+                passwordChangeError = null
+                scope.launch {
+                    val result = runCatching {
+                        val account = FirebaseAuth.getInstance().currentUser ?: error("You are signed out.")
+                        account.updatePassword(newPassword).await()
+                        RbacRemoteService().completeManagedPasswordChange().getOrThrow()
                     }
-                ) { Text(if (passwordChangeBusy) "Saving…" else "Change password") }
-            },
-            dismissButton = { TextButton(onClick = { viewModel.signOut() }, enabled = !passwordChangeBusy) { Text("Sign out") } }
-        )
-    }
-}
-
-@Composable
-private fun RoleSummary(role: UserRole) {
-    val (title, description) = when (role) {
-        UserRole.CONTRIBUTOR -> "Contributor" to "You can collect and submit Khowar data. Validation and publication happen separately."
-        UserRole.VALIDATOR -> "Validator" to "Your project account includes community validation permissions."
-        UserRole.EXPERT -> "Expert" to "Your project account includes linguistic and cultural verification permissions."
-        UserRole.RESEARCHER -> "Researcher" to "Your project account includes approved research-data access."
-        UserRole.MODERATOR -> "Moderator" to "Your project account includes community moderation permissions."
-        UserRole.DATA_STEWARD -> "Data Steward" to "Your project account includes dataset quality and metadata stewardship."
-        UserRole.AUDITOR -> "Auditor" to "Your project account includes audit-history access."
-        UserRole.ADMIN -> "Administrator" to "Your project account includes platform governance permissions."
-        UserRole.SUPER_ADMIN -> "Super Administrator" to "Your project account has the highest platform authority."
-        UserRole.VISITOR -> "Visitor" to "Public browsing access."
-    }
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text("Account role: $title", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    result.onSuccess { mustChangePassword = false; newPassword = ""; confirmPassword = "" }
+                        .onFailure { error -> passwordChangeError = error.message ?: "Password change failed. Please try again." }
+                    passwordChangeBusy = false
+                }
+            }) { Text(if (passwordChangeBusy) "Saving…" else "Change password") }
+        }, dismissButton = { TextButton(onClick = { viewModel.signOut() }, enabled = !passwordChangeBusy) { Text("Sign out") } })
     }
 }
 
