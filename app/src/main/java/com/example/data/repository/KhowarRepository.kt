@@ -188,7 +188,6 @@ class KhowarRepository(private val database: AppDatabase) {
         SubmissionValidator.validateSpeech(audioFilePath, durationSeconds, transcriptKhowar).getOrThrow()
         require(java.io.File(audioFilePath).isFile) { "Recording file is missing." }
         if (durationSeconds <= 0.0) return@withContext Result.failure(Exception("Audio duration must be greater than zero."))
-        if (transcriptKhowar.trim().isBlank()) return@withContext Result.failure(Exception("Speech transcript cannot be empty."))
         val norm = KhowarNormalizer.normalizeKhowarText(transcriptKhowar)
         val entry = SpeechRecording(
             speakerPublicId = "SPK-" + MessageDigest.getInstance("SHA-256").digest(user.id.toByteArray()).joinToString("") { "%02x".format(it) }.take(24), speakerAgeGroup = speakerAgeGroup.trim(),
