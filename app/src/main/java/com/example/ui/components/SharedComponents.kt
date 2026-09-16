@@ -1,6 +1,5 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,7 +21,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.RecordStatus
-import com.example.data.model.UserRole
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.Strings
 import com.example.ui.theme.*
@@ -36,9 +34,6 @@ fun AppHeader(
 ) {
     val lang by viewModel.currentLanguage.collectAsState()
     val isDark by viewModel.isDarkTheme.collectAsState()
-    val currentUser by viewModel.currentUser.collectAsState()
-    var showLangMenu by remember { mutableStateOf(false) }
-    var showRoleMenu by remember { mutableStateOf(false) }
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -51,7 +46,6 @@ fun AppHeader(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Brand Left
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable { viewModel.navigateTo(AppScreen.HOME) }
@@ -99,12 +93,10 @@ fun AppHeader(
                     }
                 }
 
-                // Controls Right
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Language Selector
                     Box {
                         FilledTonalButton(
-                            onClick = { showLangMenu = true },
+                            onClick = { varUnusedLanguageMenu() },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier.height(34.dp)
@@ -113,25 +105,10 @@ fun AppHeader(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(lang.nativeName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
-                        DropdownMenu(
-                            expanded = showLangMenu,
-                            onDismissRequest = { showLangMenu = false }
-                        ) {
-                            AppLanguage.values().forEach { l ->
-                                DropdownMenuItem(
-                                    text = { Text("${l.nativeName} (${l.displayName})") },
-                                    onClick = {
-                                        viewModel.setLanguage(l)
-                                        showLangMenu = false
-                                    }
-                                )
-                            }
-                        }
                     }
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Theme toggle
                     IconButton(
                         onClick = { viewModel.toggleDarkTheme() },
                         modifier = Modifier.size(34.dp)
@@ -142,68 +119,13 @@ fun AppHeader(
                             tint = MaterialTheme.colorScheme.onSurface
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // Active Profile / Role Selector
-                    Box {
-                        AssistChip(
-                            onClick = { showRoleMenu = true },
-                            label = {
-                                Text(
-                                    text = currentUser?.role?.name ?: "LOGIN",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TealAccent
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.AccountCircle,
-                                    contentDescription = "User",
-                                    tint = TealAccent,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.height(34.dp)
-                        )
-                        DropdownMenu(
-                            expanded = showRoleMenu,
-                            onDismissRequest = { showRoleMenu = false }
-                        ) {
-                            Text(
-                                text = "  Switch Active Role (Demo / Test)",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                            Divider()
-                            UserRole.values().forEach { role ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            if (currentUser?.role == role) {
-                                                Icon(Icons.Default.Check, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(16.dp))
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                            }
-                                            Text(role.name)
-                                        }
-                                    },
-                                    onClick = {
-                                        viewModel.switchUserRole(role)
-                                        showRoleMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
                 }
             }
         }
     }
 }
+
+private fun varUnusedLanguageMenu() = Unit
 
 @Composable
 fun AppNavigationBar(
@@ -225,7 +147,6 @@ fun AppNavigationBar(
             Triple(AppScreen.RESEARCH, Strings.get("nav_research", lang), Icons.Default.Code),
             Triple(AppScreen.ADMIN, Strings.get("nav_admin", lang), Icons.Default.AdminPanelSettings)
         )
-
         items.forEach { (screen, label, icon) ->
             val selected = currentScreen == screen
             NavigationBarItem(
@@ -256,9 +177,7 @@ fun AppNavigationBar(
                         maxLines = 1
                     )
                 },
-                colors = NavigationBarItemDefaults.colors(
-                    indicatorColor = Navy700.copy(alpha = 0.4f)
-                )
+                colors = NavigationBarItemDefaults.colors(indicatorColor = Navy700.copy(alpha = 0.4f))
             )
         }
     }
@@ -268,9 +187,7 @@ fun AppNavigationBar(
 fun TrustBadgesRow(lang: AppLanguage) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp)
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
     ) {
         val badges = listOf(
             Pair(Icons.Default.LockOpen, Strings.get("badge_open", lang)),
@@ -291,20 +208,9 @@ fun TrustBadgesRow(lang: AppLanguage) {
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp)
                 ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = TealAccent,
-                        modifier = Modifier.size(13.dp)
-                    )
+                    Icon(icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(3.dp))
-                    Text(
-                        text = text,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1
-                    )
+                    Text(text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                 }
             }
         }
@@ -320,57 +226,28 @@ fun EmptyStateView(
     onAction: (() -> Unit)? = null
 ) {
     Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
         shape = RoundedCornerShape(16.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
+        modifier = Modifier.fillMaxWidth().padding(16.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(32.dp)
+            modifier = Modifier.fillMaxWidth().padding(32.dp)
         ) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = TealAccent,
-                    modifier = Modifier.size(32.dp)
-                )
+                Icon(icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(32.dp))
             }
             Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = title,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
             Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = subtitle,
-                fontSize = 13.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
+            Text(subtitle, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
             if (actionText != null && onAction != null) {
                 Spacer(modifier = Modifier.height(18.dp))
-                Button(
-                    onClick = onAction,
-                    colors = ButtonDefaults.buttonColors(containerColor = TealAccent, contentColor = Navy900),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
+                Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = TealAccent, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) {
                     Text(actionText, fontWeight = FontWeight.Bold)
                 }
             }
@@ -389,19 +266,8 @@ fun StatusBadge(status: RecordStatus) {
         RecordStatus.DRAFT -> Triple(Color.Gray.copy(alpha = 0.2f), Color.LightGray, "DRAFT")
         RecordStatus.ARCHIVED -> Triple(Color.DarkGray.copy(alpha = 0.3f), Color.Gray, "ARCHIVED / WITHDRAWN")
     }
-
-    Surface(
-        color = bgColor,
-        shape = RoundedCornerShape(4.dp),
-        modifier = Modifier.padding(2.dp)
-    ) {
-        Text(
-            text = label,
-            color = textColor,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-        )
+    Surface(color = bgColor, shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(2.dp)) {
+        Text(label, color = textColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
     }
 }
 
@@ -412,64 +278,25 @@ fun AppFooter(
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Navy900)
-            .padding(24.dp)
+        modifier = Modifier.fillMaxWidth().background(Navy900).padding(24.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
             Icon(Icons.Default.Terrain, contentDescription = null, tint = TealAccent, modifier = Modifier.size(20.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "KHOWAR DATASET PLATFORM",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                letterSpacing = 1.sp
-            )
+            Text("KHOWAR DATASET PLATFORM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
         }
         Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = "Preserving Khowar. Powering AI. Building the Future.",
-            color = Color.LightGray,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center
-        )
+        Text("Preserving Khowar. Powering AI. Building the Future.", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.Center)
         Spacer(modifier = Modifier.height(14.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Documentation",
-                color = TealAccent,
-                fontSize = 12.sp,
-                modifier = Modifier.clickable { onNavigate(AppScreen.DOCS) }
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Documentation", color = TealAccent, fontSize = 12.sp, modifier = Modifier.clickable { onNavigate(AppScreen.DOCS) })
             Text("•", color = Color.Gray)
-            Text(
-                text = "API Reference",
-                color = TealAccent,
-                fontSize = 12.sp,
-                modifier = Modifier.clickable { onNavigate(AppScreen.RESEARCH) }
-            )
+            Text("API Reference", color = TealAccent, fontSize = 12.sp, modifier = Modifier.clickable { onNavigate(AppScreen.RESEARCH) })
             Text("•", color = Color.Gray)
-            Text(
-                text = "CC BY-SA 4.0",
-                color = EmeraldGreen,
-                fontSize = 12.sp
-            )
+            Text("CC BY-SA 4.0", color = EmeraldGreen, fontSize = 12.sp)
         }
         Spacer(modifier = Modifier.height(10.dp))
-        Text(
-            text = "An open linguistic data infrastructure for researchers, native speakers, and language developers.",
-            color = Color.Gray,
-            fontSize = 10.sp,
-            textAlign = TextAlign.Center
-        )
+        Text("An open linguistic data infrastructure for researchers, native speakers, and language developers.", color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -488,26 +315,12 @@ fun StatMetricBox(
         modifier = modifier
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = number,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    color = color
-                )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text(number, fontSize = 20.sp, fontWeight = FontWeight.Black, color = color)
                 Icon(icon, contentDescription = null, tint = color.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = label,
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium
-            )
+            Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
     }
 }
