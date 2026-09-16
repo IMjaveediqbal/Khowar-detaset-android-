@@ -17,7 +17,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.data.model.UserRole
+import com.example.data.repository.RbacRemoteService
 import com.example.ui.viewmodel.KhowarViewModel
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.tasks.await
 
 @Composable
 fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
@@ -29,8 +33,20 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     var username by rememberSaveable(user?.id) { mutableStateOf(user?.username.orEmpty()) }
     var region by rememberSaveable(user?.id) { mutableStateOf(user?.region ?: "Chitral") }
     var password by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var create by rememberSaveable { mutableStateOf(false) }
     var confirmWithdrawal by remember { mutableStateOf(false) }
+    var mustChangePassword by remember(user?.id) { mutableStateOf(false) }
+    var passwordChangeBusy by remember { mutableStateOf(false) }
+    var passwordChangeError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(user?.id) {
+        val uid = user?.id ?: return@LaunchedEffect
+        mustChangePassword = runCatching {
+            FirebaseFirestore.getInstance().collection("users").document(uid).get().await().getBoolean("mustChangePassword") == true
+        }.getOrDefault(false)
+    }
 
     LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -134,6 +150,33 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
 
     if (confirmWithdrawal) {
         AlertDialog(onDismissRequest = { confirmWithdrawal = false }, title = { Text("Withdraw your contributions?") }, text = { Text("This archives your cloud records and excludes them from future exports. Previously downloaded copies cannot be recalled. An internet connection is required.") }, confirmButton = { TextButton(onClick = { confirmWithdrawal = false; viewModel.withdrawConsent("ALL_USER_RECORDS", user!!.id) }) { Text("Withdraw") } }, dismissButton = { TextButton(onClick = { confirmWithdrawal = false }) { Text("Cancel") } })
+    }
+
+    if (user != null && mustChangePassword) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Set a new password") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("This project account was created by an administrator. You must replace the temporary password before continuing.")
+                    OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = !passwordChangeBusy)
+                    OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), enabled = !passwordChangeBusy)
+                    if (passwordChangeError != null) Text(passwordChangeError!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Text("Use at least 12 characters.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !passwordChangeBusy && newPassword.length >= 12 && newPassword == confirmPassword,
+                    onClick = {
+                        passwordChangeBusy = true
+                        passwordChangeError = null
+                        LaunchedEffect(Unit) {}
+                    }
+                ) { Text(if (passwordChangeBusy) "Saving…" else "Change password") }
+            },
+            dismissButton = { TextButton(onClick = { viewModel.signOut() }, enabled = !passwordChangeBusy) { Text("Sign out") } }
+        )
     }
 }
 
