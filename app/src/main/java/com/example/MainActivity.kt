@@ -26,7 +26,9 @@ import com.example.ui.screens.*
 import com.example.ui.theme.KhowarDatasetTheme
 import com.example.ui.viewmodel.AppScreen
 import com.example.ui.viewmodel.KhowarViewModel
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 @Composable
 private fun RbacDeniedScreen(title: String, message: String) {
@@ -57,6 +59,12 @@ class MainActivity : ComponentActivity() {
             val statusMessage by viewModel.statusMessage.collectAsState()
             val currentUser by viewModel.currentUser.collectAsState()
             val communityOpen by CommunityUiState.open.collectAsState()
+            val managedPasswordRequired by produceState(initialValue = false, key1 = currentUser?.id) {
+                val uid = currentUser?.id
+                value = if (uid == null) false else runCatching {
+                    FirebaseFirestore.getInstance().collection("users").document(uid).get().await().getBoolean("mustChangePassword") == true
+                }.getOrDefault(false)
+            }
 
             val lexiconQueue by viewModel.lexiconQueue.collectAsState()
             val sentenceQueue by viewModel.sentenceQueue.collectAsState()
@@ -78,8 +86,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            LaunchedEffect(managedPasswordRequired) {
+                if (managedPasswordRequired) viewModel.navigateTo(AppScreen.PROFILE)
+            }
 
             fun navigateWithRbac(target: AppScreen) {
+                if (managedPasswordRequired && target != AppScreen.PROFILE) {
+                    coroutineScope.launch { snackbarHostState.showSnackbar("Change your temporary password before using the platform.") }
+                    viewModel.navigateTo(AppScreen.PROFILE)
+                    return
+                }
                 val allowed = when (target) {
                     AppScreen.VALIDATE -> RbacPolicy.can(role, RbacPermission.VALIDATE_COMMUNITY)
                     AppScreen.RESEARCH -> RbacPolicy.can(role, RbacPermission.ACCESS_RESEARCH_HUB)
@@ -91,38 +107,43 @@ class MainActivity : ComponentActivity() {
             }
 
             CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides if (currentLanguage.isRtl) androidx.compose.ui.unit.LayoutDirection.Rtl else androidx.compose.ui.unit.LayoutDirection.Ltr) {
-            KhowarDatasetTheme(darkTheme = isDark) {
-                Box(Modifier.fillMaxSize()) {
-                    Scaffold(
-                        topBar = { AppHeader(viewModel = viewModel) },
-                        bottomBar = {
-                            AppNavigationBar(currentScreen = currentScreen, onNavigate = ::navigateWithRbac, lang = currentLanguage, reviewQueueCount = totalQueueCount)
-                        },
-                        floatingActionButton = {
-                            ExtendedFloatingActionButton(onClick = { CommunityUiState.show() }, icon = { Icon(Icons.Default.Groups, contentDescription = null) }, text = { Text("Community") })
-                        },
-                        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                        modifier = Modifier.fillMaxSize()
-                    ) { innerPadding ->
-                        Crossfade(targetState = currentScreen, label = "ScreenTransition", modifier = Modifier.padding(innerPadding)) { screen ->
-                            when (screen) {
-                                AppScreen.HOME -> HomeScreen(viewModel = viewModel)
-                                AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
-                                AppScreen.CONTRIBUTE -> formState.SaveableStateProvider("contribute-${currentUser?.id}") { ContributorHubScreen(viewModel = viewModel) }
-                                AppScreen.VALIDATE -> if (RbacPolicy.can(role, RbacPermission.VALIDATE_COMMUNITY)) ValidateScreen(viewModel = viewModel) else RbacDeniedScreen("Validation restricted", "A Validator, Expert, Admin or Super Admin role is required.")
-                                AppScreen.STATS -> StatsScreen(viewModel = viewModel)
-                                AppScreen.RESEARCH -> if (RbacPolicy.can(role, RbacPermission.ACCESS_RESEARCH_HUB)) ResearcherScreen(viewModel = viewModel) else RbacDeniedScreen("Research workspace restricted", "Researcher, Expert, Admin or Super Admin access is required.")
-                                AppScreen.ADMIN -> if (RbacPolicy.can(role, RbacPermission.MANAGE_USERS)) AdminScreen(viewModel = viewModel) else RbacDeniedScreen("Administration restricted", "Administrator privileges are required.")
-                                AppScreen.DOCS -> DocsScreen(viewModel = viewModel)
-                                AppScreen.PROFILE -> ProfileScreen(viewModel = viewModel)
+                KhowarDatasetTheme(darkTheme = isDark) {
+                    Box(Modifier.fillMaxSize()) {
+                        Scaffold(
+                            topBar = { AppHeader(viewModel = viewModel) },
+                            bottomBar = { AppNavigationBar(currentScreen = currentScreen, onNavigate = ::navigateWithRbac, lang = currentLanguage, reviewQueueCount = totalQueueCount) },
+                            floatingActionButton = {
+                                ExtendedFloatingActionButton(
+                                    onClick = {
+                                        if (managedPasswordRequired) coroutineScope.launch { snackbarHostState.showSnackbar("Change your temporary password before using Community.") }
+                                        else CommunityUiState.show()
+                                    },
+                                    icon = { Icon(Icons.Default.Groups, contentDescription = null) },
+                                    text = { Text("Community") }
+                                )
+                            },
+                            snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                            modifier = Modifier.fillMaxSize()
+                        ) { innerPadding ->
+                            Crossfade(targetState = currentScreen, label = "ScreenTransition", modifier = Modifier.padding(innerPadding)) { screen ->
+                                when (screen) {
+                                    AppScreen.HOME -> HomeScreen(viewModel = viewModel)
+                                    AppScreen.EXPLORE -> ExploreScreen(viewModel = viewModel)
+                                    AppScreen.CONTRIBUTE -> formState.SaveableStateProvider("contribute-${currentUser?.id}") { ContributorHubScreen(viewModel = viewModel) }
+                                    AppScreen.VALIDATE -> if (RbacPolicy.can(role, RbacPermission.VALIDATE_COMMUNITY)) ValidateScreen(viewModel = viewModel) else RbacDeniedScreen("Validation restricted", "A Validator, Expert, Admin or Super Admin role is required.")
+                                    AppScreen.STATS -> StatsScreen(viewModel = viewModel)
+                                    AppScreen.RESEARCH -> if (RbacPolicy.can(role, RbacPermission.ACCESS_RESEARCH_HUB)) ResearcherScreen(viewModel = viewModel) else RbacDeniedScreen("Research workspace restricted", "Researcher, Expert, Admin or Super Admin access is required.")
+                                    AppScreen.ADMIN -> if (RbacPolicy.can(role, RbacPermission.MANAGE_USERS)) AdminScreen(viewModel = viewModel) else RbacDeniedScreen("Administration restricted", "Administrator privileges are required.")
+                                    AppScreen.DOCS -> DocsScreen(viewModel = viewModel)
+                                    AppScreen.PROFILE -> ProfileScreen(viewModel = viewModel)
+                                }
                             }
                         }
-                    }
-                    if (communityOpen) {
-                        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { CommunityScreen(viewModel = viewModel) }
+                        if (communityOpen && !managedPasswordRequired) {
+                            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { CommunityScreen(viewModel = viewModel) }
+                        }
                     }
                 }
-            }
             }
         }
     }
