@@ -54,7 +54,7 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(if (user == null) "Khowar Dataset Account" else "My Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("One account system for the whole platform. Your role is assigned securely by the project server.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("One account system for the whole platform.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (user == null) {
@@ -64,9 +64,13 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Person, contentDescription = null)
                             Spacer(Modifier.width(8.dp))
-                            Text(if (create) "Create a Contributor account" else "Sign in", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(if (create) "Create an account" else "Sign in", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
-                        Text(if (create) "New public accounts are Contributors. Start collecting Khowar data immediately; no role selection is needed." else "Already have an account? Use the same sign-in here. Researcher, Expert, Validator and other project roles are recognized automatically.", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            if (create) "Create a new account and start collecting Khowar data."
+                            else "Sign in with your email and password.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
@@ -74,14 +78,13 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
             item { OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth()) }
             if (create) {
                 item { OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
-                item { Text("Privileged project accounts are provisioned by authorized administrators. They do not use public registration.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             item {
                 Button(onClick = { viewModel.authenticate(email, password, create, name); password = "" }, enabled = email.isNotBlank() && password.isNotEmpty() && (!create || (password.length >= 8 && name.trim().length >= 2)), modifier = Modifier.fillMaxWidth()) {
-                    Text(if (create) "Create Contributor Account" else "Sign in")
+                    Text(if (create) "Create Account" else "Sign in")
                 }
             }
-            item { TextButton(onClick = { create = !create }, modifier = Modifier.fillMaxWidth()) { Text(if (create) "Already have an account? Sign in" else "New contributor? Create an account") } }
+            item { TextButton(onClick = { create = !create }, modifier = Modifier.fillMaxWidth()) { Text(if (create) "Already have an account? Sign in" else "Create a new account") } }
         } else {
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
