@@ -4,7 +4,7 @@
   "engines": {
     "node": "20"
   },
-  "main": "lib/index.js",
+  "main": "lib/entry.js",
   "scripts": {
     "build": "tsc",
     "serve": "firebase emulators:start --only functions",
