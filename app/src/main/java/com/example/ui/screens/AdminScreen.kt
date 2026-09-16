@@ -37,6 +37,7 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     val auditLogs by viewModel.allAuditLogs.collectAsState()
     val versions by viewModel.datasetVersions.collectAsState()
     var showReleaseDialog by remember { mutableStateOf(false) }
+    var showProvisionDialog by remember { mutableStateOf(false) }
     var selectedUserForRoleChange by remember { mutableStateOf<User?>(null) }
     var adminTab by remember { mutableStateOf("AUDIT") }
     val scope = rememberCoroutineScope()
@@ -61,11 +62,20 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                         }
                         Text("RBAC, user provisioning, dataset releases and audit logs", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    if (RbacPolicy.can(currentUser?.role, com.example.security.RbacPermission.RELEASE_DATASET)) {
-                        Button(onClick = { showReleaseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) {
-                            Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("New Release", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (RbacPolicy.can(currentUser?.role, com.example.security.RbacPermission.MANAGE_USERS)) {
+                            FilledTonalButton(onClick = { showProvisionDialog = true }, shape = RoundedCornerShape(8.dp)) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Provision", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        if (RbacPolicy.can(currentUser?.role, com.example.security.RbacPermission.RELEASE_DATASET)) {
+                            Button(onClick = { showReleaseDialog = true }, colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) {
+                                Icon(Icons.Default.Publish, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("New Release", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                 }
@@ -88,14 +98,20 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     }
 
     if (showReleaseDialog) CreateReleaseDialog(viewModel = viewModel, onDismiss = { showReleaseDialog = false })
+    if (showProvisionDialog) {
+        ProvisionAccountDialog(
+            currentRole = currentUser?.role,
+            rbac = rbac,
+            scope = scope,
+            onDismiss = { showProvisionDialog = false }
+        )
+    }
     selectedUserForRoleChange?.let { targetUser ->
         RoleChangeDialog(
             targetUser = targetUser,
             currentRole = currentUser?.role,
             onRoleSelected = { role ->
-                scope.launch {
-                    rbac.setUserRole(targetEmail = targetUser.email, role = role)
-                }
+                scope.launch { rbac.setUserRole(targetEmail = targetUser.email, role = role) }
                 selectedUserForRoleChange = null
             },
             onDismiss = { selectedUserForRoleChange = null }
@@ -130,6 +146,56 @@ fun UserRowCard(user: User, onRoleChange: () -> Unit) {
                 Text("Region: ${user.region} • Language: ${user.preferredLanguage}", fontSize = 10.sp, color = TealAccent)
             }
             FilledTonalButton(onClick = onRoleChange, shape = RoundedCornerShape(6.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text(user.role.name, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+@Composable
+fun ProvisionAccountDialog(currentRole: UserRole?, rbac: RbacService, scope: kotlinx.coroutines.CoroutineScope, onDismiss: () -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var displayName by remember { mutableStateOf("") }
+    var region by remember { mutableStateOf("Chitral") }
+    var role by remember { mutableStateOf(UserRole.RESEARCHER) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    val allowedRoles = UserRole.values().filter { it !in setOf(UserRole.VISITOR, UserRole.CONTRIBUTOR) && (currentRole == UserRole.SUPER_ADMIN || it !in setOf(UserRole.ADMIN, UserRole.SUPER_ADMIN)) }
+
+    Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
+        Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Provision Project Account", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("Create a controlled login for a Researcher, Expert, Validator or other managed project role. The new user will be required to change the temporary password.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(password, { password = it }, label = { Text("Temporary password (12+ characters)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(displayName, { displayName = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(region, { region = it }, label = { Text("Region / community") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Text("Account role", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                allowedRoles.forEach { candidate ->
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { role = candidate }) {
+                        RadioButton(selected = role == candidate, onClick = { role = candidate })
+                        Column {
+                            Text(candidate.name, fontWeight = FontWeight.Medium)
+                            Text(roleDescription(candidate), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                    TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
+                    Button(onClick = {
+                        busy = true
+                        message = ""
+                        scope.launch {
+                            val result = rbac.provisionManagedAccount(email, password, displayName, region, role)
+                            busy = false
+                            result.onSuccess { onDismiss() }.onFailure { message = it.message ?: "Account could not be created." }
+                        }
+                    }, enabled = !busy && email.isNotBlank() && password.length >= 12 && displayName.trim().length >= 2 && region.isNotBlank()) {
+                        Text(if (busy) "Creating…" else "Create Account")
+                    }
+                }
+            }
         }
     }
 }
