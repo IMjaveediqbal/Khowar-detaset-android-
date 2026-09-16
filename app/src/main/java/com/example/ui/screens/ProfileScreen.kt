@@ -22,25 +22,58 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     var password by remember { mutableStateOf("") }
     var create by rememberSaveable { mutableStateOf(false) }
     var confirmWithdrawal by remember { mutableStateOf(false) }
+
     LazyColumn(modifier.fillMaxSize(), contentPadding=PaddingValues(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        item { Text(if(user == null) "Sign in" else "Your profile", style=MaterialTheme.typography.headlineSmall) }
+        item { Text(if (user == null) "Khowar Dataset Account" else "Your profile", style=MaterialTheme.typography.headlineSmall) }
         if (user == null) {
+            item {
+                Card(modifier=Modifier.fillMaxWidth()) {
+                    Column(modifier=Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Text(if (create) "Create a Contributor account" else "Sign in to your account", style=MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (create) "Anyone can create a Contributor account to collect Khowar data. You do not choose a privileged role here."
+                            else "If the project administrator gave you an account, sign in with those credentials. Your role is loaded automatically from the secure server.",
+                            style=MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
             item { OutlinedTextField(email,{email=it},label={Text("Email")},singleLine=true,modifier=Modifier.fillMaxWidth()) }
             item { OutlinedTextField(password,{password=it},label={Text("Password")},singleLine=true,visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth()) }
-            if(create) item { OutlinedTextField(name,{name=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth()) }
-            item { Button(onClick={viewModel.authenticate(email,password,create,name);password=""},enabled=email.isNotBlank()&&password.isNotEmpty()&&(!create||(password.length>=8&&name.length>=2))) { Text(if(create) "Create account" else "Sign in") } }
-            item { TextButton(onClick={create=!create}) { Text(if(create) "Already have an account? Sign in" else "Create a new account") } }
+            if (create) {
+                item { OutlinedTextField(name,{name=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth()) }
+                item {
+                    Text(
+                        "Researcher, Expert, Validator, Moderator, Data Steward, Auditor, Admin and Super Admin accounts are provisioned by authorized project administrators rather than created through public registration.",
+                        style=MaterialTheme.typography.bodySmall,
+                        color=MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            item {
+                Button(onClick={viewModel.authenticate(email,password,create,name);password=""},enabled=email.isNotBlank()&&password.isNotEmpty()&&(!create||(password.length>=8&&name.length>=2)),modifier=Modifier.fillMaxWidth()) {
+                    Text(if (create) "Create Contributor Account" else "Sign in")
+                }
+            }
+            item { TextButton(onClick={create=!create}) { Text(if(create) "Already have an account? Sign in" else "New contributor? Create an account") } }
         } else {
-            item { Text("${user!!.email} · ${user!!.role}") }
+            item {
+                Card(modifier=Modifier.fillMaxWidth()) {
+                    Column(modifier=Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        Text(user!!.displayName,style=MaterialTheme.typography.titleMedium)
+                        Text(user!!.email,style=MaterialTheme.typography.bodySmall)
+                        Text("Role: ${user!!.role}",style=MaterialTheme.typography.labelLarge)
+                        Text("Your role is assigned by the project server. It cannot be selected or changed from this profile.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
             item { OutlinedTextField(name,{name=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth()) }
             item { OutlinedTextField(region,{region=it},label={Text("Region")},modifier=Modifier.fillMaxWidth()) }
             item { Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { Button(onClick={viewModel.loginOrRegister(email,name,user!!.username,user!!.role,region)}) { Text("Save profile") }; TextButton(onClick={viewModel.signOut()}) { Text("Sign out") } } }
             item { Text("Uploads",style=MaterialTheme.typography.titleLarge); Text("Saved on this phone until the server confirms upload."); TextButton(onClick={viewModel.retrySync()}) { Text("Sync / retry failed uploads") } }
-            items(operations,key={it.key}) { operation ->
-                Column { Text("${operation.collection} · ${operation.state}"); if(operation.error.isNotEmpty()) Text(operation.error,color=MaterialTheme.colorScheme.error) }
-            }
+            items(operations,key={it.key}) { operation -> Column { Text("${operation.collection} · ${operation.state}"); if(operation.error.isNotEmpty()) Text(operation.error,color=MaterialTheme.colorScheme.error) } }
             item { OutlinedButton(onClick={confirmWithdrawal=true}) { Text("Withdraw consent for all my contributions") } }
         }
     }
-    if(confirmWithdrawal) AlertDialog(onDismissRequest={confirmWithdrawal=false}, title={Text("Withdraw your contributions?")},text={Text("This archives your cloud records and excludes them from future exports. Previously downloaded copies cannot be recalled. An internet connection is required.")},confirmButton={TextButton(onClick={confirmWithdrawal=false;viewModel.withdrawConsent("ALL_USER_RECORDS",user!!.id)}){Text("Withdraw")}},dismissButton={TextButton(onClick={confirmWithdrawal=false}){Text("Cancel")}})
+    if(confirmWithdrawal) AlertDialog(onDismissRequest={confirmWithdrawal=false},title={Text("Withdraw your contributions?")},text={Text("This archives your cloud records and excludes them from future exports. Previously downloaded copies cannot be recalled. An internet connection is required.")},confirmButton={TextButton(onClick={confirmWithdrawal=false;viewModel.withdrawConsent("ALL_USER_RECORDS",user!!.id)}){Text("Withdraw")}},dismissButton={TextButton(onClick={confirmWithdrawal=false}){Text("Cancel")}})
 }
