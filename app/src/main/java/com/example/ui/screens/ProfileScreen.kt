@@ -21,6 +21,7 @@ import com.example.data.repository.RbacRemoteService
 import com.example.ui.viewmodel.KhowarViewModel
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 @Composable
@@ -40,6 +41,7 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     var mustChangePassword by remember(user?.id) { mutableStateOf(false) }
     var passwordChangeBusy by remember { mutableStateOf(false) }
     var passwordChangeError by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(user?.id) {
         val uid = user?.id ?: return@LaunchedEffect
@@ -171,7 +173,21 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                     onClick = {
                         passwordChangeBusy = true
                         passwordChangeError = null
-                        LaunchedEffect(Unit) {}
+                        scope.launch {
+                            val result = runCatching {
+                                val account = FirebaseAuth.getInstance().currentUser ?: error("You are signed out.")
+                                account.updatePassword(newPassword).await()
+                                RbacRemoteService().completeManagedPasswordChange().getOrThrow()
+                            }
+                            result.onSuccess {
+                                mustChangePassword = false
+                                newPassword = ""
+                                confirmPassword = ""
+                            }.onFailure { error ->
+                                passwordChangeError = error.message ?: "Password change failed. Please try again."
+                            }
+                            passwordChangeBusy = false
+                        }
                     }
                 ) { Text(if (passwordChangeBusy) "Saving…" else "Change password") }
             },
