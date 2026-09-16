@@ -157,7 +157,7 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                                     require(cleanName.length in 2..100) { "Display name must be 2–100 characters." }
                                     require(cleanUsername.matches(Regex("[A-Za-z0-9_.-]{2,32}"))) { "Username must use 2–32 letters, numbers, _, -, or ." }
                                     require(cleanRegion.isNotEmpty()) { "Enter your region or community." }
-                                    FirebaseFunctions.getInstance().getHttpsCallable("saveProfile").call(mapOf("displayName" to cleanName, "username" to cleanUsername, "region" to cleanRegion, "bio" to cleanBio)).await()
+                                    FirebaseFunctions.getInstance().getHttpsCallable("saveProfileDetails").call(mapOf("displayName" to cleanName, "username" to cleanUsername, "region" to cleanRegion, "bio" to cleanBio)).await()
                                     account.updateProfile(UserProfileChangeRequest.Builder().setDisplayName(cleanName).build()).await()
                                     viewModel.repository.setCurrentUser(user!!.copy(displayName = cleanName, username = cleanUsername, region = cleanRegion, bio = cleanBio))
                                 }
@@ -173,12 +173,12 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Your dataset activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Platform activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                             ActivityStat("Approved records", stats.totalApprovedRecords.toString(), Modifier.weight(1f))
                             ActivityStat("Speech hours", String.format("%.1f", stats.totalSpeechHours), Modifier.weight(1f))
                         }
-                        Text("These are live platform totals, not your personal contribution count.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("These are live totals across the platform.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
