@@ -116,12 +116,14 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                         }
                         Text(if (operations.isEmpty()) "No pending local uploads." else "${operations.size} upload operation(s) are being tracked on this device.", style = MaterialTheme.typography.bodySmall)
                         TextButton(onClick = { viewModel.retrySync() }) { Text("Sync / retry uploads") }
-                        items(operations.take(10), key = { it.key }) { operation ->
-                            Column {
-                                Text("${operation.collection} · ${operation.state}", style = MaterialTheme.typography.labelMedium)
-                                if (operation.error.isNotBlank()) Text(operation.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
+                    }
+                }
+            }
+            items(operations.take(10), key = { it.key }) { operation ->
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                        Text("${operation.collection} · ${operation.state}", style = MaterialTheme.typography.labelMedium)
+                        if (operation.error.isNotBlank()) Text(operation.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
