@@ -3,77 +3,164 @@ package com.example.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.data.model.UserRole
 import com.example.ui.viewmodel.KhowarViewModel
 
 @Composable
 fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     val user by viewModel.currentUser.collectAsState()
     val operations by viewModel.syncOperations.collectAsState()
+    val stats by viewModel.statistics.collectAsState()
     var email by rememberSaveable(user?.id) { mutableStateOf(user?.email.orEmpty()) }
     var name by rememberSaveable(user?.id) { mutableStateOf(user?.displayName.orEmpty()) }
+    var username by rememberSaveable(user?.id) { mutableStateOf(user?.username.orEmpty()) }
     var region by rememberSaveable(user?.id) { mutableStateOf(user?.region ?: "Chitral") }
-    // Password is intentionally neither saved nor persisted.
     var password by remember { mutableStateOf("") }
     var create by rememberSaveable { mutableStateOf(false) }
     var confirmWithdrawal by remember { mutableStateOf(false) }
 
-    LazyColumn(modifier.fillMaxSize(), contentPadding=PaddingValues(20.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
-        item { Text(if (user == null) "Khowar Dataset Account" else "Your profile", style=MaterialTheme.typography.headlineSmall) }
+    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (user == null) "Khowar Dataset Account" else "My Profile", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("One account system for the whole platform. Your role is assigned securely by the project server.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
         if (user == null) {
             item {
-                Card(modifier=Modifier.fillMaxWidth()) {
-                    Column(modifier=Modifier.padding(16.dp), verticalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Text(if (create) "Create a Contributor account" else "Sign in to your account", style=MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (create) "Anyone can create a Contributor account to collect Khowar data. You do not choose a privileged role here."
-                            else "If the project administrator gave you an account, sign in with those credentials. Your role is loaded automatically from the secure server.",
-                            style=MaterialTheme.typography.bodySmall
-                        )
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Person, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (create) "Create a Contributor account" else "Sign in", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Text(if (create) "New public accounts are Contributors. Start collecting Khowar data immediately; no role selection is needed." else "Already have an account? Use the same sign-in here. Researcher, Expert, Validator and other project roles are recognized automatically.", style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-            item { OutlinedTextField(email,{email=it},label={Text("Email")},singleLine=true,modifier=Modifier.fillMaxWidth()) }
-            item { OutlinedTextField(password,{password=it},label={Text("Password")},singleLine=true,visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth()) }
+            item { OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+            item { OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth()) }
             if (create) {
-                item { OutlinedTextField(name,{name=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth()) }
-                item {
-                    Text(
-                        "Researcher, Expert, Validator, Moderator, Data Steward, Auditor, Admin and Super Admin accounts are provisioned by authorized project administrators rather than created through public registration.",
-                        style=MaterialTheme.typography.bodySmall,
-                        color=MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                item { OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
+                item { Text("Privileged project accounts are provisioned by authorized administrators. They do not use public registration.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             item {
-                Button(onClick={viewModel.authenticate(email,password,create,name);password=""},enabled=email.isNotBlank()&&password.isNotEmpty()&&(!create||(password.length>=8&&name.length>=2)),modifier=Modifier.fillMaxWidth()) {
+                Button(onClick = { viewModel.authenticate(email, password, create, name); password = "" }, enabled = email.isNotBlank() && password.isNotEmpty() && (!create || (password.length >= 8 && name.trim().length >= 2)), modifier = Modifier.fillMaxWidth()) {
                     Text(if (create) "Create Contributor Account" else "Sign in")
                 }
             }
-            item { TextButton(onClick={create=!create}) { Text(if(create) "Already have an account? Sign in" else "New contributor? Create an account") } }
+            item { TextButton(onClick = { create = !create }, modifier = Modifier.fillMaxWidth()) { Text(if (create) "Already have an account? Sign in" else "New contributor? Create an account") } }
         } else {
             item {
-                Card(modifier=Modifier.fillMaxWidth()) {
-                    Column(modifier=Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                        Text(user!!.displayName,style=MaterialTheme.typography.titleMedium)
-                        Text(user!!.email,style=MaterialTheme.typography.bodySmall)
-                        Text("Role: ${user!!.role}",style=MaterialTheme.typography.labelLarge)
-                        Text("Your role is assigned by the project server. It cannot be selected or changed from this profile.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val initials = user!!.displayName.trim().split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }.ifBlank { "K" }
+                            Surface(shape = CircleShape, tonalElevation = 3.dp) { Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Text(initials, fontWeight = FontWeight.Bold) } }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(user!!.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(user!!.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        HorizontalDivider()
+                        RoleSummary(user!!.role)
                     }
                 }
             }
-            item { OutlinedTextField(name,{name=it},label={Text("Display name")},modifier=Modifier.fillMaxWidth()) }
-            item { OutlinedTextField(region,{region=it},label={Text("Region")},modifier=Modifier.fillMaxWidth()) }
-            item { Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) { Button(onClick={viewModel.loginOrRegister(email,name,user!!.username,user!!.role,region)}) { Text("Save profile") }; TextButton(onClick={viewModel.signOut()}) { Text("Sign out") } } }
-            item { Text("Uploads",style=MaterialTheme.typography.titleLarge); Text("Saved on this phone until the server confirms upload."); TextButton(onClick={viewModel.retrySync()}) { Text("Sync / retry failed uploads") } }
-            items(operations,key={it.key}) { operation -> Column { Text("${operation.collection} · ${operation.state}"); if(operation.error.isNotEmpty()) Text(operation.error,color=MaterialTheme.colorScheme.error) } }
-            item { OutlinedButton(onClick={confirmWithdrawal=true}) { Text("Withdraw consent for all my contributions") } }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Profile information", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        OutlinedTextField(username, { username = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(region, { region = it }, label = { Text("Region / community") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        Text("Your role and login credentials are not editable from this profile. Role changes are administrator-controlled.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Button(onClick = { viewModel.loginOrRegister(user!!.email, name, username, user!!.role, region) }, enabled = name.trim().length >= 2, modifier = Modifier.fillMaxWidth()) { Text("Save profile") }
+                    }
+                }
+            }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Dataset activity", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            ActivityStat("Approved records", stats.totalApprovedRecords.toString(), Modifier.weight(1f))
+                            ActivityStat("Speech hours", String.format("%.1f", stats.totalSpeechHours), Modifier.weight(1f))
+                        }
+                        Text("These are live platform totals, not a personal contribution count.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (operations.isEmpty()) Icon(Icons.Default.CloudDone, contentDescription = null) else Icon(Icons.Default.CloudOff, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Upload & sync", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                        Text(if (operations.isEmpty()) "No pending local uploads." else "${operations.size} upload operation(s) are being tracked on this device.", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { viewModel.retrySync() }) { Text("Sync / retry uploads") }
+                        items(operations.take(10), key = { it.key }) { operation ->
+                            Column {
+                                Text("${operation.collection} · ${operation.state}", style = MaterialTheme.typography.labelMedium)
+                                if (operation.error.isNotBlank()) Text(operation.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+            }
+            item { OutlinedButton(onClick = { confirmWithdrawal = true }, modifier = Modifier.fillMaxWidth()) { Text("Withdraw consent for all my contributions") } }
+            item { TextButton(onClick = { viewModel.signOut() }, modifier = Modifier.fillMaxWidth()) { Text("Sign out") } }
         }
     }
-    if(confirmWithdrawal) AlertDialog(onDismissRequest={confirmWithdrawal=false},title={Text("Withdraw your contributions?")},text={Text("This archives your cloud records and excludes them from future exports. Previously downloaded copies cannot be recalled. An internet connection is required.")},confirmButton={TextButton(onClick={confirmWithdrawal=false;viewModel.withdrawConsent("ALL_USER_RECORDS",user!!.id)}){Text("Withdraw")}},dismissButton={TextButton(onClick={confirmWithdrawal=false}){Text("Cancel")}})
+
+    if (confirmWithdrawal) {
+        AlertDialog(onDismissRequest = { confirmWithdrawal = false }, title = { Text("Withdraw your contributions?") }, text = { Text("This archives your cloud records and excludes them from future exports. Previously downloaded copies cannot be recalled. An internet connection is required.") }, confirmButton = { TextButton(onClick = { confirmWithdrawal = false; viewModel.withdrawConsent("ALL_USER_RECORDS", user!!.id) }) { Text("Withdraw") } }, dismissButton = { TextButton(onClick = { confirmWithdrawal = false }) { Text("Cancel") } })
+    }
+}
+
+@Composable
+private fun RoleSummary(role: UserRole) {
+    val (title, description) = when (role) {
+        UserRole.CONTRIBUTOR -> "Contributor" to "You can collect and submit Khowar data. Validation and publication happen separately."
+        UserRole.VALIDATOR -> "Validator" to "Your project account includes community validation permissions."
+        UserRole.EXPERT -> "Expert" to "Your project account includes linguistic and cultural verification permissions."
+        UserRole.RESEARCHER -> "Researcher" to "Your project account includes approved research-data access."
+        UserRole.MODERATOR -> "Moderator" to "Your project account includes community moderation permissions."
+        UserRole.DATA_STEWARD -> "Data Steward" to "Your project account includes dataset quality and metadata stewardship."
+        UserRole.AUDITOR -> "Auditor" to "Your project account includes audit-history access."
+        UserRole.ADMIN -> "Administrator" to "Your project account includes platform governance permissions."
+        UserRole.SUPER_ADMIN -> "Super Administrator" to "Your project account has the highest platform authority."
+        UserRole.VISITOR -> "Visitor" to "Public browsing access."
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text("Account role: $title", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun ActivityStat(label: String, value: String, modifier: Modifier = Modifier) {
+    Card(modifier = modifier) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }
