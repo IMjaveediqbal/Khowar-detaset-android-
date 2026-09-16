@@ -85,7 +85,8 @@ fun AppNavigationBar(currentScreen: AppScreen, onNavigate: (AppScreen) -> Unit, 
             Triple(AppScreen.VALIDATE, Strings.get("nav_validate", lang), Icons.Default.VerifiedUser),
             Triple(AppScreen.STATS, Strings.get("nav_stats", lang), Icons.Default.BarChart),
             Triple(AppScreen.RESEARCH, Strings.get("nav_research", lang), Icons.Default.Code),
-            Triple(AppScreen.ADMIN, Strings.get("nav_admin", lang), Icons.Default.AdminPanelSettings)
+            Triple(AppScreen.ADMIN, Strings.get("nav_admin", lang), Icons.Default.AdminPanelSettings),
+            Triple(AppScreen.PROFILE, "Profile", Icons.Default.Person)
         )
         items.forEach { (screen, label, icon) ->
             val selected = currentScreen == screen
@@ -101,11 +102,19 @@ fun AppNavigationBar(currentScreen: AppScreen, onNavigate: (AppScreen) -> Unit, 
 @Composable
 fun TrustBadgesRow(lang: AppLanguage) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        val badges = listOf(Pair(Icons.Default.LockOpen, Strings.get("badge_open", lang)), Pair(Icons.Default.Groups, Strings.get("badge_community", lang)), Pair(Icons.Default.Verified, Strings.get("badge_validated", lang)), Pair(Icons.Default.Shield, Strings.get("badge_privacy", lang)), Pair(Icons.Default.Copyright, Strings.get("badge_license", lang)))
+        val badges = listOf(
+            Pair(Icons.Default.LockOpen, Strings.get("badge_open", lang)),
+            Pair(Icons.Default.Groups, Strings.get("badge_community", lang)),
+            Pair(Icons.Default.Verified, Strings.get("badge_validated", lang)),
+            Pair(Icons.Default.Shield, Strings.get("badge_privacy", lang)),
+            Pair(Icons.Default.Copyright, Strings.get("badge_license", lang))
+        )
         badges.forEach { (icon, text) ->
             Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), shape = RoundedCornerShape(6.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)), modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center, modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp)) {
-                    Icon(icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(13.dp)); Spacer(modifier = Modifier.width(3.dp)); Text(text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                    Icon(imageVector = icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(text = text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                 }
             }
         }
@@ -116,10 +125,17 @@ fun TrustBadgesRow(lang: AppLanguage) {
 fun EmptyStateView(title: String, subtitle: String, icon: ImageVector = Icons.Outlined.Inbox, actionText: String? = null, onAction: (() -> Unit)? = null) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(32.dp)) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))) { Icon(icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(32.dp)) }
-            Spacer(modifier = Modifier.height(16.dp)); Text(title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(6.dp)); Text(subtitle, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-            if (actionText != null && onAction != null) { Spacer(modifier = Modifier.height(18.dp)); Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = TealAccent, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) { Text(actionText, fontWeight = FontWeight.Bold) } }
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(64.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))) {
+                Icon(imageVector = icon, contentDescription = null, tint = TealAccent, modifier = Modifier.size(32.dp))
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = subtitle, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            if (actionText != null && onAction != null) {
+                Spacer(modifier = Modifier.height(18.dp))
+                Button(onClick = onAction, colors = ButtonDefaults.buttonColors(containerColor = TealAccent, contentColor = Navy900), shape = RoundedCornerShape(8.dp)) { Text(actionText, fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
@@ -135,16 +151,31 @@ fun StatusBadge(status: RecordStatus) {
         RecordStatus.DRAFT -> Triple(Color.Gray.copy(alpha = 0.2f), Color.LightGray, "DRAFT")
         RecordStatus.ARCHIVED -> Triple(Color.DarkGray.copy(alpha = 0.3f), Color.Gray, "ARCHIVED / WITHDRAWN")
     }
-    Surface(color = bgColor, shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(2.dp)) { Text(label, color = textColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)) }
+    Surface(color = bgColor, shape = RoundedCornerShape(4.dp), modifier = Modifier.padding(2.dp)) {
+        Text(text = label, color = textColor, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+    }
 }
 
 @Composable
 fun AppFooter(lang: AppLanguage, onNavigate: (AppScreen) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().background(Navy900).padding(24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) { Icon(Icons.Default.Terrain, contentDescription = null, tint = TealAccent, modifier = Modifier.size(20.dp)); Spacer(modifier = Modifier.width(8.dp)); Text("KHOWAR DATASET PLATFORM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp) }
-        Spacer(modifier = Modifier.height(6.dp)); Text("Preserving Khowar. Powering AI. Building the Future.", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.Center)
-        Spacer(modifier = Modifier.height(14.dp)); Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) { Text("Documentation", color = TealAccent, fontSize = 12.sp, modifier = Modifier.clickable { onNavigate(AppScreen.DOCS) }); Text("•", color = Color.Gray); Text("API Reference", color = TealAccent, fontSize = 12.sp, modifier = Modifier.clickable { onNavigate(AppScreen.RESEARCH) }); Text("•", color = Color.Gray); Text("CC BY-SA 4.0", color = EmeraldGreen, fontSize = 12.sp) }
-        Spacer(modifier = Modifier.height(10.dp)); Text("An open linguistic data infrastructure for researchers, native speakers, and language developers.", color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Icon(Icons.Default.Terrain, contentDescription = null, tint = TealAccent, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("KHOWAR DATASET PLATFORM", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp, letterSpacing = 1.sp)
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text("Preserving Khowar. Powering AI. Building the Future.", color = Color.LightGray, fontSize = 11.sp, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Documentation", color = TealAccent, fontSize = 12.sp, modifier = Modifier.clickable { onNavigate(AppScreen.DOCS) })
+            Text("•", color = Color.Gray)
+            Text("API Reference", color = TealAccent, fontSize = 12.sp, modifier = Modifier.clickable { onNavigate(AppScreen.RESEARCH) })
+            Text("•", color = Color.Gray)
+            Text("CC BY-SA 4.0", color = EmeraldGreen, fontSize = 12.sp)
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Text("An open linguistic data infrastructure for researchers, native speakers, and language developers.", color = Color.Gray, fontSize = 10.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -152,8 +183,12 @@ fun AppFooter(lang: AppLanguage, onNavigate: (AppScreen) -> Unit) {
 fun StatMetricBox(number: String, label: String, icon: ImageVector, color: Color, modifier: Modifier = Modifier) {
     Surface(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)), modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) { Text(number, fontSize = 20.sp, fontWeight = FontWeight.Black, color = color); Icon(icon, contentDescription = null, tint = color.copy(alpha = 0.8f), modifier = Modifier.size(20.dp)) }
-            Spacer(modifier = Modifier.height(4.dp)); Text(label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Text(text = number, fontSize = 20.sp, fontWeight = FontWeight.Black, color = color)
+                Icon(icon, contentDescription = null, tint = color.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(text = label, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
         }
     }
 }
