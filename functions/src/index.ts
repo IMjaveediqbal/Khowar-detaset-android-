@@ -5,6 +5,7 @@ import { getFirestore, FieldPath, Filter } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { createHash } from "node:crypto";
 import { roles, Role, reviewers, researchers, canChangeRole, canAdvance, fields, validatePayload } from "./policy";
+import { provisionManagedAccount } from "./provisionAccount";
 initializeApp();
 const db = getFirestore();
 const auth = getAuth();
@@ -20,7 +21,6 @@ async function memberUid(request: { auth?: { uid: string } }): Promise<string> {
   if (account.disabled || !account.email) throw new HttpsError("permission-denied", "Sign in with a registered account to contribute.");
   return uid;
 }
-// Read current server-owned role, rather than stale claims after demotion.
 async function roleOf(uid: string): Promise<Role> {
   const user = await auth.getUser(uid);
   if (user.disabled) throw new HttpsError("permission-denied", "Account disabled.");
@@ -56,7 +56,6 @@ export const saveProfile = onCall(options, async request => {
     const existing = await tx.get(ref);
     const claimedRole = account.customClaims?.role;
     const role: Role = existing.data()?.role ?? (roles.includes(claimedRole) ? claimedRole : "CONTRIBUTOR");
-    // Do not write a stale role back over a concurrent administrator decision.
     tx.set(ref, existing.exists ? profile : { ...profile, role }, { merge: true });
     return { ...profile, role };
   });
@@ -78,7 +77,6 @@ export const setUserRole = onCall(options, async request => {
     tx.set(ref, { role: next, roleUpdatedBy: uid, roleUpdatedAt: Date.now() }, { merge: true });
     tx.set(db.collection("auditLogs").doc(), { action: "ROLE_CHANGED", actorUid: uid, targetUid: target.uid, previousRole: previous, newRole: next, reason, createdAt: Date.now() });
   });
-  // Rules also consult the protected user document, so a claim update failure cannot retain revoked privileges.
   await auth.setCustomUserClaims(target.uid, { ...target.customClaims, role: next });
   return { ok: true, role: next };
 });
@@ -177,9 +175,8 @@ export const transitionDataStage = onCall(options, async request => {
     tx.update(ref, { dataStage:next, stageChangedBy:uid, stageConfidenceScore:confidence, stageComments:comments, updatedAt:Date.now() });
     tx.set(db.collection('auditLogs').doc(), { action:'DATA_STAGE_TRANSITION', actorUid:uid, collection:ref.parent.id, recordId:ref.id, previousStage:data.dataStage, newStage:next, comments, confidence, createdAt:Date.now() });
   });
-  return { ok:true };
+  return {ok:true};
 });
-// Bounded, resumable withdrawal. Retry until remaining=false; each page is atomic.
 export const withdrawConsent = onCall(options, async request => {
   const uid = uidOf(request);
   const collection = String(request.data?.collection ?? '');
@@ -216,24 +213,22 @@ export const reportDataset = onCall(options, async request => {
 });
 export const addCommunityComment = onCall(options, async request => {
   const uid=await memberUid(request); const postId=String(request.data?.postId??''); const body=String(request.data?.body??'').trim(); const commentId=String(request.data?.commentId??'');
-  if(!/^[\w-]{1,128}$/.test(postId)||!/^[\w-]{1,128}$/.test(commentId)||body.length<2||body.length>3000)throw new HttpsError('invalid-argument','Invalid comment.');
+  if(!/^[\\w-]{1,128}$/.test(postId)||!/^[\\w-]{1,128}$/.test(commentId)||body.length<2||body.length>3000)throw new HttpsError('invalid-argument','Invalid comment.');
   const post=db.collection('communityPosts').doc(postId); const ref=post.collection('comments').doc(commentId);
   const profile=await db.collection('users').doc(uid).get();
   await db.runTransaction(async tx=>{const p=await tx.get(post);const old=await tx.get(ref);if(!p.exists)throw new HttpsError('not-found','Post not found.');if(old.exists){if(old.data()?.ownerUid!==uid||old.data()?.body!==body)throw new HttpsError('already-exists','Comment ID used.');return;}tx.create(ref,{ownerUid:uid,authorProfileId:uid,authorName:profile.data()?.displayName??'Contributor',body,accepted:false,createdAt:Date.now()});tx.update(post,{answerCount:Number(p.data()?.answerCount??0)+1,updatedAt:Date.now()});});
   return {id:ref.id};
 });
 export const voteOnCommunityPost = onCall(options, async request => {
-  const uid=await memberUid(request);const postId=String(request.data?.postId??'');if(!/^[\w-]{1,128}$/.test(postId))throw new HttpsError('invalid-argument','Invalid post.');
+  const uid=await memberUid(request);const postId=String(request.data?.postId??'');if(!/^[\\w-]{1,128}$/.test(postId))throw new HttpsError('invalid-argument','Invalid post.');
   const post=db.collection('communityPosts').doc(postId);const vote=post.collection('votes').doc(uid);
   await db.runTransaction(async tx=>{const p=await tx.get(post);const v=await tx.get(vote);if(!p.exists)throw new HttpsError('not-found','Post not found.');if(v.exists)tx.delete(vote);else tx.create(vote,{createdAt:Date.now()});tx.update(post,{voteScore:Math.max(0,Number(p.data()?.voteScore??0)+(v.exists?-1:1)),updatedAt:Date.now()});});return {ok:true};
 });
-
 export const createDatasetDraft = onCall(options, async request => {
   const uid=uidOf(request);await requireRole(uid,['ADMIN','SUPER_ADMIN']);
   const version=String(request.data?.version??'').trim();const name=String(request.data?.name??'').trim();
   if(!/^[A-Za-z0-9._-]{1,64}$/.test(version)||!name||name.length>160)throw new HttpsError('invalid-argument','Valid version and name required.');
   const ref=db.collection('dataset_versions').doc(version);
-  // Immutable pilot snapshots: explicit size limit, never silently truncate.
   await db.runTransaction(async tx=>{
     const old=await tx.get(ref);if(old.exists)throw new HttpsError('already-exists','Version already exists.');
     const records: Record<string,unknown>[]=[];
@@ -252,7 +247,7 @@ export const createDatasetDraft = onCall(options, async request => {
 });
 export const acceptCommunityAnswer = onCall(options,async request=>{
   const uid=uidOf(request);const postId=String(request.data?.postId??'');const commentId=String(request.data?.commentId??'');
-  if(!/^[\w-]{1,128}$/.test(postId)||!/^[\w-]{1,128}$/.test(commentId))throw new HttpsError('invalid-argument','Invalid answer.');
+  if(!/^[\\w-]{1,128}$/.test(postId)||!/^[\\w-]{1,128}$/.test(commentId))throw new HttpsError('invalid-argument','Invalid answer.');
   const post=db.collection('communityPosts').doc(postId);const answer=post.collection('comments').doc(commentId);
   await db.runTransaction(async tx=>{
     const p=await tx.get(post);const a=await tx.get(answer);
@@ -275,3 +270,4 @@ export const resolveDatasetReports = onCall(options,async request=>{
     tx.set(db.collection('auditLogs').doc(),{action:'RESOLVE_REPORTS',actorUid:uid,collection:ref.parent.id,recordId:ref.id,notes,createdAt:Date.now()});
   });return {ok:true};
 });
+export { provisionManagedAccount };
