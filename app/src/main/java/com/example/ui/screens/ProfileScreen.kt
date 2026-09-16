@@ -34,7 +34,6 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     var name by rememberSaveable(user?.id) { mutableStateOf(user?.displayName.orEmpty()) }
     var username by rememberSaveable(user?.id) { mutableStateOf(user?.username.orEmpty()) }
     var region by rememberSaveable(user?.id) { mutableStateOf(user?.region ?: "") }
-    var bio by rememberSaveable(user?.id) { mutableStateOf(user?.bio.orEmpty()) }
     var password by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -92,7 +91,7 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                 item { OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
                 item {
                     Text(
-                        "After creating the account, open Profile to add your username and region before making substantial contributions.",
+                        "Your account is created first. Your username and region can then be completed from My Profile.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -136,10 +135,7 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                             Text("Add a username and region so your contributions have useful community context.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             Text(user!!.region, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                            if (user!!.bio.isNotBlank()) Text(user!!.bio, style = MaterialTheme.typography.bodyMedium)
-                            if (user!!.role == UserRole.CONTRIBUTOR) {
-                                Text("Contributor", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                            }
+                            if (user!!.role == UserRole.CONTRIBUTOR) Text("Contributor", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -156,19 +152,9 @@ fun ProfileScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                         OutlinedTextField(username, { username = it }, label = { Text("Username") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                         OutlinedTextField(region, { region = it }, label = { Text("Region / community") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(
-                            bio,
-                            { bio = it.take(300) },
-                            label = { Text("About you (optional)") },
-                            minLines = 3,
-                            maxLines = 5,
-                            modifier = Modifier.fillMaxWidth()
-                        )
                         Text("Your account email and internal access permissions are managed separately.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Button(
-                            onClick = {
-                                viewModel.loginOrRegister(user!!.email, name.trim(), username.trim(), UserRole.CONTRIBUTOR, region.trim())
-                            },
+                            onClick = { viewModel.loginOrRegister(user!!.email, name.trim(), username.trim(), UserRole.CONTRIBUTOR, region.trim()) },
                             enabled = name.trim().length >= 2 && username.trim().length >= 2 && region.trim().isNotBlank(),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Save profile") }
