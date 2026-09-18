@@ -29,17 +29,22 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 36
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
+      # Use bash explicitly so the workflow does not depend on the executable
+      # bit being preserved for gradlew by the checkout/filesystem layer.
       - name: Run unit tests
-        run: ./gradlew testDebugUnitTest lintDebug compileReleaseKotlin --stacktrace
+        run: bash ./gradlew testDebugUnitTest lintDebug compileReleaseKotlin --stacktrace --no-daemon
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: bash ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload Android verification reports
         if: always()
