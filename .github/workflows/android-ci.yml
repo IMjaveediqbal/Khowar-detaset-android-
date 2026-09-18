@@ -41,6 +41,18 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
+      - name: Verify APK targets Android 16 (API 36)
+        run: |
+          APK=$(find app/build/outputs/apk/debug -name '*.apk' -print -quit)
+          test -n "$APK"
+          TARGET=$(
+            "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" \\
+              | sed -n "s/.*targetSdkVersion:'\\([0-9]*\\)'.*/\\1/p" \\
+              | head -n 1
+          )
+          echo "APK target SDK: $TARGET"
+          test "$TARGET" = "36"
+
       - name: Upload Android verification reports
         if: always()
         uses: actions/upload-artifact@v4
