@@ -219,14 +219,14 @@ export const reportDataset = onCall(options, async request => {
 });
 export const addCommunityComment = onCall(options, async request => {
   const uid=await memberUid(request); const postId=String(request.data?.postId??''); const body=String(request.data?.body??'').trim(); const commentId=String(request.data?.commentId??'');
-  if(!/^[\\w-]{1,128}$/.test(postId)||!/^[\\w-]{1,128}$/.test(commentId)||body.length<2||body.length>3000)throw new HttpsError('invalid-argument','Invalid comment.');
+  if(!/^[\w-]{1,128}$/.test(postId)||!/^[\w-]{1,128}$/.test(commentId)||body.length<2||body.length>3000)throw new HttpsError('invalid-argument','Invalid comment.');
   const post=db.collection('communityPosts').doc(postId); const ref=post.collection('comments').doc(commentId);
   const profile=await db.collection('users').doc(uid).get();
   await db.runTransaction(async tx=>{const p=await tx.get(post);const old=await tx.get(ref);if(!p.exists)throw new HttpsError('not-found','Post not found.');if(old.exists){if(old.data()?.ownerUid!==uid||old.data()?.body!==body)throw new HttpsError('already-exists','Comment ID used.');return;}tx.create(ref,{ownerUid:uid,authorProfileId:uid,authorName:profile.data()?.displayName??'Contributor',body,accepted:false,createdAt:Date.now()});tx.update(post,{answerCount:Number(p.data()?.answerCount??0)+1,updatedAt:Date.now()});});
   return {id:ref.id};
 });
 export const voteOnCommunityPost = onCall(options, async request => {
-  const uid=await memberUid(request);const postId=String(request.data?.postId??'');if(!/^[\\w-]{1,128}$/.test(postId))throw new HttpsError('invalid-argument','Invalid post.');
+  const uid=await memberUid(request);const postId=String(request.data?.postId??'');if(!/^[\w-]{1,128}$/.test(postId))throw new HttpsError('invalid-argument','Invalid post.');
   const post=db.collection('communityPosts').doc(postId);const vote=post.collection('votes').doc(uid);
   await db.runTransaction(async tx=>{const p=await tx.get(post);const v=await tx.get(vote);if(!p.exists)throw new HttpsError('not-found','Post not found.');if(v.exists)tx.delete(vote);else tx.create(vote,{createdAt:Date.now()});tx.update(post,{voteScore:Math.max(0,Number(p.data()?.voteScore??0)+(v.exists?-1:1)),updatedAt:Date.now()});});return {ok:true};
 });
@@ -253,7 +253,7 @@ export const createDatasetDraft = onCall(options, async request => {
 });
 export const acceptCommunityAnswer = onCall(options,async request=>{
   const uid=uidOf(request);const postId=String(request.data?.postId??'');const commentId=String(request.data?.commentId??'');
-  if(!/^[\\w-]{1,128}$/.test(postId)||!/^[\\w-]{1,128}$/.test(commentId))throw new HttpsError('invalid-argument','Invalid answer.');
+  if(!/^[\w-]{1,128}$/.test(postId)||!/^[\w-]{1,128}$/.test(commentId))throw new HttpsError('invalid-argument','Invalid answer.');
   const post=db.collection('communityPosts').doc(postId);const answer=post.collection('comments').doc(commentId);
   await db.runTransaction(async tx=>{
     const p=await tx.get(post);const a=await tx.get(answer);

@@ -13,8 +13,8 @@ class SubmissionValidatorTest {
     }
 
     @Test
-    fun word_requires_translation() {
-        assertFalse(
+    fun raw_word_allows_translation_to_be_added_during_validation() {
+        assertTrue(
             SubmissionValidator.validateWord("کھوار", "", "", "native speaker").isSuccess
         )
     }
