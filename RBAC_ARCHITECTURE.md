@@ -35,7 +35,7 @@ RBAC is deny-by-default and enforced in three layers:
 The server validates transitions, role authority, ownership/self-review restrictions, moderation holds, approval state, provenance, licensing, confidence and release authority.
 
 ## Role assignment
-Public registration always creates CONTRIBUTOR. Clients cannot choose a privileged role. `setUserRole` is the trusted role-management endpoint. ADMIN and SUPER_ADMIN can manage roles; ADMIN cannot grant ADMIN/SUPER_ADMIN, and only SUPER_ADMIN can grant SUPER_ADMIN. Role changes update Firebase Auth custom claims, the user profile, and an audit log.
+Public registration always creates CONTRIBUTOR. Clients cannot choose a privileged role. `setUserRole` is the trusted role-management endpoint. ADMIN and SUPER_ADMIN can manage roles and appoint ADMIN accounts, but neither can grant SUPER_ADMIN through the application. SUPER_ADMIN is bootstrap-only. Role changes update Firebase Auth custom claims, the user profile, and an audit log.
 
 ## Governance
 - Deny by default.

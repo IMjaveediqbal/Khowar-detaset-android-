@@ -32,6 +32,7 @@ enum class AppScreen {
     STATS,
     RESEARCH,
     ADMIN,
+    ADMIN_LOGIN,
     DOCS,
     PROFILE
 }
@@ -178,10 +179,29 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
             if (create) {
                 if (auth.currentUser?.isAnonymous == true) auth.currentUser!!.linkWithCredential(EmailAuthProvider.getCredential(email.trim(), password)).await()
                 else auth.createUserWithEmailAndPassword(email.trim(), password).await()
-                repository.registerOrLoginUser(email, name.ifBlank { "Contributor" }, "", UserRole.CONTRIBUTOR, "Chitral")
+                repository.registerOrLoginUser(name.ifBlank { "Contributor" }, "", "Chitral")
             } else auth.signInWithEmailAndPassword(email.trim(), password).await()
             refreshTrustedRole()
             _statusMessage.value = "Signed in successfully."
+        }
+    }
+
+    fun authenticateAdmin(email: String, password: String) {
+        viewModelScope.launch(errorHandler) {
+            val auth = firebaseAuth ?: error("Firebase is not configured. Add google-services.json first.")
+            require(email.isNotBlank() && password.isNotEmpty()) { "Enter the administrator email and password." }
+            val account = auth.signInWithEmailAndPassword(email.trim().lowercase(), password).await().user
+                ?: error("Administrator sign-in failed.")
+            val (uid, roleName) = rbacRemoteService.getMyRbac().getOrThrow()
+            val role = runCatching { UserRole.valueOf(roleName) }.getOrDefault(UserRole.CONTRIBUTOR)
+            if (uid != account.uid || role !in setOf(UserRole.ADMIN, UserRole.SUPER_ADMIN)) {
+                auth.signOut()
+                repository.setCurrentUser(null)
+                error("This link is only for administrator accounts.")
+            }
+            loadTrustedUser(account, role)
+            _currentScreen.value = AppScreen.ADMIN
+            _statusMessage.value = "Administrator signed in successfully."
         }
     }
     fun signOut() {
@@ -198,14 +218,32 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
             if (account.isAnonymous) return@launch
             val (uid, roleName) = rbacRemoteService.getMyRbac().getOrThrow()
             require(uid == account.uid) { "Account changed. Please retry." }
-            val remote = FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
-            if (firebaseAuth?.currentUser?.uid != uid) return@launch
-            val cached = database.userDao().getById(uid)
-            val user = (cached ?: User(id=uid,email=account.email.orEmpty(),displayName=remote.getString("displayName") ?: "Contributor",username=remote.getString("username").orEmpty(),region=remote.getString("region") ?: "Chitral")).copy(role=UserRole.valueOf(roleName))
-            database.userDao().insert(user)
-            repository.setCurrentUser(user)
-            DatasetSyncWorker.syncNow(getApplication())
+            loadTrustedUser(account, UserRole.valueOf(roleName))
         }
+    }
+
+    private suspend fun loadTrustedUser(account: com.google.firebase.auth.FirebaseUser, role: UserRole) {
+        val uid = account.uid
+        val remote = FirebaseFirestore.getInstance().collection("users").document(uid).get().await()
+        if (firebaseAuth?.currentUser?.uid != uid) return
+        val cached = database.userDao().getById(uid)
+        val user = (cached ?: User(
+            id = uid,
+            email = account.email.orEmpty(),
+            displayName = remote.getString("displayName") ?: account.displayName ?: "Contributor",
+            username = remote.getString("username").orEmpty(),
+            region = remote.getString("region") ?: "Chitral"
+        )).copy(
+            email = account.email.orEmpty(),
+            displayName = remote.getString("displayName") ?: cached?.displayName ?: account.displayName ?: "Contributor",
+            username = remote.getString("username") ?: cached?.username.orEmpty(),
+            region = remote.getString("region") ?: cached?.region ?: "Chitral",
+            bio = remote.getString("bio") ?: cached?.bio.orEmpty(),
+            role = role
+        )
+        database.userDao().insert(user)
+        repository.setCurrentUser(user)
+        DatasetSyncWorker.syncNow(getApplication())
     }
     fun retrySync() { DatasetSyncWorker.syncNow(getApplication()) }
 
@@ -317,13 +355,10 @@ class KhowarViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /**
-     * Sign-in/registration compatibility hook. The requested role is intentionally ignored;
-     * authenticated users start as contributors until an administrator assigns a higher role.
-     */
-    fun loginOrRegister(email: String, name: String, username: String, role: UserRole, region: String) {
+    /** Sign-in/registration compatibility hook; profile creation has no client role input. */
+    fun loginOrRegister(name: String, username: String, region: String) {
         viewModelScope.launch(errorHandler) {
-            val user = repository.registerOrLoginUser(email, name, username, UserRole.CONTRIBUTOR, region)
+            val user = repository.registerOrLoginUser(name, username, region)
             _statusMessage.value = "Profile saved for ${user.displayName}."
             refreshTrustedRole()
         }

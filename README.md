@@ -10,13 +10,14 @@ Android app for community contributions of Khowar words, sentences, speech, stor
 4. Enable Email/Password and Anonymous Authentication. Anonymous accounts browse approved records; contributions require an email/password account. Creating an account while browsing anonymously links that identity. App Check debug builds require a registered debug token; release builds use Play Integrity.
 5. Use a separate Firebase development project. With Node 20+ and Java 21, run `npm ci --prefix functions` and `npm test --prefix functions`. Run `npm run test:integration --prefix functions` for isolated `demo-khowar` emulator tests.
 6. Deploy Functions, Firestore rules/indexes and Storage rules together to your development project using Firebase CLI. Enable the cross-service Firestore access required by Storage rules. Never deploy just the new Android client against the old rules/functions.
-7. Provision the first SUPER_ADMIN using the Admin SDK from an authorized administrative environment. Both the protected `/users/{uid}.role` and custom claim should agree. No account can self-assign privileges.
+7. Provision the first `SUPER_ADMIN` using the Admin SDK from an authorized administrative environment. Both the protected `/users/{uid}.role` and custom claim should agree. `SUPER_ADMIN` is bootstrap-only and cannot be created or assigned from the app.
+8. Public registration always creates a `CONTRIBUTOR`; the public profile screen contains no role selector. Existing administrators sign in through the private Android deep link `khowardataset://admin/login`. An authenticated Admin can create or promote another Admin, but no in-app flow can grant `SUPER_ADMIN`.
 
 Release signing uses `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_PASSWORD` and alias `upload`. Do not commit a release keystore. Debug builds use Android's generated debug keystore.
 
 ## Data flow
 
-- Sign-in is handled by Firebase Authentication. Room user IDs are Firebase UIDs. Editing profile text does not authenticate or change an email address.
+- Sign-in is handled by Firebase Authentication. Room user IDs are Firebase UIDs. Editing profile text does not authenticate, change an email address or change a role. Ordinary users only see navigation permitted by their trusted server role.
 - Submission commits a local record, consent, audit entry and upload operation in one Room transaction.
 - WorkManager drains queued operations over a connected network, with exponential retry and visible upload states. Cloud submission is idempotent for the record ID/payload/owner.
 - All six collections download in pages of 100. Approved and owned records are available to contributors; trusted reviewers can retrieve pending work. Withdrawn previously public records emit tombstones for other clients.

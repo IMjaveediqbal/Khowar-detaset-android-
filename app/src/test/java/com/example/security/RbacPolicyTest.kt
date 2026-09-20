@@ -33,4 +33,10 @@ class RbacPolicyTest {
         assertTrue(RbacPolicy.can(UserRole.SUPER_ADMIN, RbacPermission.MANAGE_SECURITY))
         assertFalse(RbacPolicy.can(UserRole.MODERATOR, RbacPermission.RELEASE_DATASET))
     }
+
+    @Test fun adminsCanAssignAdminButNeverSuperAdmin() {
+        assertTrue(com.example.data.model.RbacPolicy.canAssignRole(UserRole.ADMIN, UserRole.ADMIN))
+        assertFalse(com.example.data.model.RbacPolicy.canAssignRole(UserRole.ADMIN, UserRole.SUPER_ADMIN))
+        assertFalse(com.example.data.model.RbacPolicy.canAssignRole(UserRole.SUPER_ADMIN, UserRole.SUPER_ADMIN))
+    }
 }

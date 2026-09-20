@@ -41,7 +41,9 @@ export const saveProfileDetails = onCall(options, async request => {
     const claimedRole = account.customClaims?.role;
     const role: Role = (typeof data.role === "string" && roles.includes(data.role as Role))
       ? data.role as Role
-      : (typeof claimedRole === "string" && roles.includes(claimedRole as Role) ? claimedRole as Role : "CONTRIBUTOR");
+      : (account.customClaims?.managedAccount === true && typeof claimedRole === "string" && roles.includes(claimedRole as Role)
+        ? claimedRole as Role
+        : "CONTRIBUTOR");
     const now = Date.now();
     const profile = {
       id: uid,

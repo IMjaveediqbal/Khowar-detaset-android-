@@ -32,17 +32,14 @@ class RbacService(
         email: String,
         temporaryPassword: String,
         displayName: String,
-        region: String,
-        role: UserRole
+        region: String
     ): Result<String> = runCatching {
         require(auth.currentUser != null) { "Authentication is required." }
-        require(role !in setOf(UserRole.VISITOR, UserRole.CONTRIBUTOR)) { "Choose a managed project role." }
         val result = functions.getHttpsCallable("provisionManagedAccount").call(mapOf(
             "email" to email.trim().lowercase(),
             "temporaryPassword" to temporaryPassword,
             "displayName" to displayName.trim(),
-            "region" to region.trim(),
-            "role" to role.name
+            "region" to region.trim()
         )).await()
         val data = result.data as? Map<*, *> ?: error("Server returned an invalid response.")
         data["email"]?.toString() ?: email.trim().lowercase()

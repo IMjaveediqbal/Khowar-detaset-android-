@@ -67,7 +67,7 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
                             FilledTonalButton(onClick = { showProvisionDialog = true }, shape = RoundedCornerShape(8.dp)) {
                                 Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("Provision", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text("Create Admin", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         if (RbacPolicy.can(currentUser?.role, com.example.security.RbacPermission.RELEASE_DATASET)) {
@@ -91,7 +91,10 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
         LazyColumn(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp), contentPadding = PaddingValues(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             when (adminTab) {
                 "AUDIT" -> if (auditLogs.isEmpty()) item { EmptyStateView(title = "No audit entries yet", subtitle = "System actions are logged immutably here.") } else items(auditLogs) { log -> AuditLogItemCard(log) }
-                "USERS" -> items(users) { u -> UserRowCard(user = u, onRoleChange = { selectedUserForRoleChange = u }) }
+                "USERS" -> items(users) { u ->
+                    val canEdit = u.id != currentUser?.id && u.role != UserRole.SUPER_ADMIN && (currentUser?.role == UserRole.SUPER_ADMIN || u.role != UserRole.ADMIN)
+                    UserRowCard(user = u, canEditRole = canEdit, onRoleChange = { selectedUserForRoleChange = u })
+                }
                 "RELEASES" -> if (versions.isEmpty()) item { EmptyStateView(title = "No Dataset Releases Published Yet", subtitle = "Publish version v1.0.0 to create a formal citable snapshot of the dataset.", actionText = "Create Dataset Release", onAction = { showReleaseDialog = true }) } else items(versions) { v -> DatasetVersionCard(v) }
             }
         }
@@ -100,7 +103,6 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     if (showReleaseDialog) CreateReleaseDialog(viewModel = viewModel, onDismiss = { showReleaseDialog = false })
     if (showProvisionDialog) {
         ProvisionAccountDialog(
-            currentRole = currentUser?.role,
             rbac = rbac,
             scope = scope,
             onDismiss = { showProvisionDialog = false }
@@ -109,7 +111,6 @@ fun AdminScreen(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     selectedUserForRoleChange?.let { targetUser ->
         RoleChangeDialog(
             targetUser = targetUser,
-            currentRole = currentUser?.role,
             onRoleSelected = { role ->
                 scope.launch { rbac.setUserRole(targetEmail = targetUser.email, role = role) }
                 selectedUserForRoleChange = null
@@ -137,7 +138,7 @@ fun AuditLogItemCard(log: com.example.data.model.AuditLog) {
 }
 
 @Composable
-fun UserRowCard(user: User, onRoleChange: () -> Unit) {
+fun UserRowCard(user: User, canEditRole: Boolean, onRoleChange: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(10.dp), border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)), modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.padding(12.dp)) {
             Column(modifier = Modifier.weight(1f)) {
@@ -145,41 +146,30 @@ fun UserRowCard(user: User, onRoleChange: () -> Unit) {
                 Text(user.email, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Region: ${user.region} • Language: ${user.preferredLanguage}", fontSize = 10.sp, color = TealAccent)
             }
-            FilledTonalButton(onClick = onRoleChange, shape = RoundedCornerShape(6.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text(user.role.name, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+            FilledTonalButton(onClick = onRoleChange, enabled = canEditRole, shape = RoundedCornerShape(6.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) { Text(user.role.name, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
 
 @Composable
-fun ProvisionAccountDialog(currentRole: UserRole?, rbac: RbacService, scope: kotlinx.coroutines.CoroutineScope, onDismiss: () -> Unit) {
+fun ProvisionAccountDialog(rbac: RbacService, scope: kotlinx.coroutines.CoroutineScope, onDismiss: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
     var region by remember { mutableStateOf("Chitral") }
-    var role by remember { mutableStateOf(UserRole.RESEARCHER) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
-    val allowedRoles = UserRole.values().filter { it !in setOf(UserRole.VISITOR, UserRole.CONTRIBUTOR) && (currentRole == UserRole.SUPER_ADMIN || it !in setOf(UserRole.ADMIN, UserRole.SUPER_ADMIN)) }
 
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
         Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Provision Project Account", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                Text("Create a controlled login for a Researcher, Expert, Validator or other managed project role. The new user will be required to change the temporary password.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Create Administrator Account", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("This creates an Admin account only. Super Admin cannot be created from the app. The new administrator must change the temporary password.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(password, { password = it }, label = { Text("Temporary password (12+ characters)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(displayName, { displayName = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(region, { region = it }, label = { Text("Region / community") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                Text("Account role", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                allowedRoles.forEach { candidate ->
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { role = candidate }) {
-                        RadioButton(selected = role == candidate, onClick = { role = candidate })
-                        Column {
-                            Text(candidate.name, fontWeight = FontWeight.Medium)
-                            Text(roleDescription(candidate), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                }
+                AssistChip(onClick = {}, enabled = false, label = { Text("Role: ADMIN") }, leadingIcon = { Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(16.dp)) })
                 if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
                 Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                     TextButton(onClick = onDismiss, enabled = !busy) { Text("Cancel") }
@@ -187,7 +177,7 @@ fun ProvisionAccountDialog(currentRole: UserRole?, rbac: RbacService, scope: kot
                         busy = true
                         message = ""
                         scope.launch {
-                            val result = rbac.provisionManagedAccount(email, password, displayName, region, role)
+                            val result = rbac.provisionManagedAccount(email, password, displayName, region)
                             busy = false
                             result.onSuccess { onDismiss() }.onFailure { message = it.message ?: "Account could not be created." }
                         }
@@ -248,14 +238,14 @@ fun CreateReleaseDialog(viewModel: KhowarViewModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-fun RoleChangeDialog(targetUser: User, currentRole: UserRole?, onRoleSelected: (UserRole) -> Unit, onDismiss: () -> Unit) {
+fun RoleChangeDialog(targetUser: User, onRoleSelected: (UserRole) -> Unit, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text("Change User Role: ${targetUser.displayName}", fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("Changes are verified by Firebase Functions and recorded in the audit ledger.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(modifier = Modifier.height(12.dp))
-                UserRole.values().filter { it != UserRole.VISITOR && (currentRole == UserRole.SUPER_ADMIN || it != UserRole.SUPER_ADMIN) }.forEach { role ->
+                UserRole.values().filter { it !in setOf(UserRole.VISITOR, UserRole.SUPER_ADMIN) }.forEach { role ->
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onRoleSelected(role) }.padding(vertical = 8.dp)) {
                         RadioButton(selected = targetUser.role == role, onClick = null)
                         Spacer(modifier = Modifier.width(8.dp))

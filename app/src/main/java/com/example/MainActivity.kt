@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -48,8 +49,24 @@ private fun RbacDeniedScreen(title: String, message: String) {
 }
 
 class MainActivity : ComponentActivity() {
+    private var adminLinkRequested by mutableStateOf(false)
+
+    private fun handleDeepLink(intent: Intent?) {
+        val data = intent?.data
+        if (data?.scheme == "khowardataset" && data.host == "admin" && data.path == "/login") {
+            adminLinkRequested = true
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleDeepLink(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleDeepLink(intent)
         enableEdgeToEdge()
         setContent {
             val viewModel: KhowarViewModel = viewModel()
@@ -89,6 +106,12 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(managedPasswordRequired) {
                 if (managedPasswordRequired) viewModel.navigateTo(AppScreen.PROFILE)
             }
+            LaunchedEffect(adminLinkRequested) {
+                if (adminLinkRequested) {
+                    viewModel.navigateTo(AppScreen.ADMIN_LOGIN)
+                    adminLinkRequested = false
+                }
+            }
 
             fun navigateWithRbac(target: AppScreen) {
                 if (managedPasswordRequired && target != AppScreen.PROFILE) {
@@ -110,10 +133,10 @@ class MainActivity : ComponentActivity() {
                 KhowarDatasetTheme(darkTheme = isDark) {
                     Box(Modifier.fillMaxSize()) {
                         Scaffold(
-                            topBar = { AppHeader(viewModel = viewModel) },
-                            bottomBar = { AppNavigationBar(currentScreen = currentScreen, onNavigate = ::navigateWithRbac, lang = currentLanguage, reviewQueueCount = totalQueueCount) },
+                            topBar = { if (currentScreen != AppScreen.ADMIN_LOGIN) AppHeader(viewModel = viewModel) },
+                            bottomBar = { if (currentScreen != AppScreen.ADMIN_LOGIN) AppNavigationBar(currentScreen = currentScreen, onNavigate = ::navigateWithRbac, lang = currentLanguage, reviewQueueCount = totalQueueCount, role = role) },
                             floatingActionButton = {
-                                ExtendedFloatingActionButton(
+                                if (currentScreen != AppScreen.ADMIN_LOGIN) ExtendedFloatingActionButton(
                                     onClick = {
                                         if (managedPasswordRequired) coroutineScope.launch { snackbarHostState.showSnackbar("Change your temporary password before using Community.") }
                                         else CommunityUiState.show()
@@ -134,6 +157,7 @@ class MainActivity : ComponentActivity() {
                                     AppScreen.STATS -> StatsScreen(viewModel = viewModel)
                                     AppScreen.RESEARCH -> if (RbacPolicy.can(role, RbacPermission.ACCESS_RESEARCH_HUB)) ResearcherScreen(viewModel = viewModel) else RbacDeniedScreen("Research workspace restricted", "Researcher, Expert, Admin or Super Admin access is required.")
                                     AppScreen.ADMIN -> if (RbacPolicy.can(role, RbacPermission.MANAGE_USERS)) AdminScreen(viewModel = viewModel) else RbacDeniedScreen("Administration restricted", "Administrator privileges are required.")
+                                    AppScreen.ADMIN_LOGIN -> AdminLoginScreen(viewModel = viewModel)
                                     AppScreen.DOCS -> DocsScreen(viewModel = viewModel)
                                     AppScreen.PROFILE -> ProfileScreen(viewModel = viewModel)
                                 }

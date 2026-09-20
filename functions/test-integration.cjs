@@ -9,7 +9,7 @@ before(async()=>{
  api=require('./lib/index');
  db=require('firebase-admin/firestore').getFirestore();auth=require('firebase-admin/auth').getAuth();
  env=await initializeTestEnvironment({projectId:'demo-khowar',firestore:{host:'127.0.0.1',port:8080,rules:fs.readFileSync('../firestore.rules','utf8')}});
- for(const [uid,role] of [['contributor','CONTRIBUTOR'],['reader','CONTRIBUTOR'],['validator','VALIDATOR'],['expert','EXPERT'],['admin','ADMIN'],['super','SUPER_ADMIN']]){
+ for(const [uid,role] of [['contributor','CONTRIBUTOR'],['reader','CONTRIBUTOR'],['validator','VALIDATOR'],['expert','EXPERT'],['admin','ADMIN'],['super','SUPER_ADMIN'],['admin-candidate','CONTRIBUTOR']]){
   await auth.createUser({uid,email:uid+'@test.invalid'});await db.collection('users').doc(uid).set({role,displayName:uid});
  }
 });
@@ -57,6 +57,21 @@ test('admin cannot demote super admin',async()=>{
  assert.equal((await db.doc('users/super').get()).data().role,'SUPER_ADMIN');
 });
 
+test('admin can appoint an admin but cannot appoint a super admin',async()=>{
+ await call('setUserRole','admin',{targetUid:'admin-candidate',role:'ADMIN',reason:'Approved administrator'});
+ assert.equal((await db.doc('users/admin-candidate').get()).data().role,'ADMIN');
+ await assert.rejects(call('setUserRole','admin',{targetUid:'reader',role:'SUPER_ADMIN',reason:'Security test'}));
+ assert.equal((await db.doc('users/reader').get()).data().role,'CONTRIBUTOR');
+});
+
+test('admin provisioning always creates ADMIN and ignores role injection',async()=>{
+ const result=await call('provisionManagedAccount','admin',{email:'created-admin@test.invalid',temporaryPassword:'temporary-1234',displayName:'Created Admin',region:'Chitral',role:'SUPER_ADMIN'});
+ assert.equal(result.role,'ADMIN');
+ const created=await auth.getUserByEmail('created-admin@test.invalid');
+ assert.equal(created.customClaims.role,'ADMIN');
+ assert.equal((await db.doc(`users/${created.uid}`).get()).data().role,'ADMIN');
+});
+
 test('withdrawal prevents queued records being uploaded later and sends public tombstones',async()=>{
  const createdAt=Date.now()-10000;
  await call('withdrawConsent','contributor',{collection:'sentences'});
@@ -77,6 +92,14 @@ test('profile updates preserve the protected server role',async()=>{
  const result=await call('saveProfile','expert',{displayName:'Expert reviewer',region:'Chitral',role:'SUPER_ADMIN'});
  assert.equal(result.role,'EXPERT');
  assert.equal((await db.doc('users/expert').get()).data().role,'EXPERT');
+});
+
+test('new public profiles are contributors even if a non-managed claim is present',async()=>{
+ await auth.createUser({uid:'public-profile',email:'public-profile@test.invalid'});
+ await auth.setCustomUserClaims('public-profile',{role:'ADMIN'});
+ const result=await call('saveProfile','public-profile',{displayName:'Public Profile',region:'Chitral'});
+ assert.equal(result.role,'CONTRIBUTOR');
+ assert.equal((await db.doc('users/public-profile').get()).data().role,'CONTRIBUTOR');
 });
 
 test('anonymous browsing accounts cannot submit records or community replies',async()=>{

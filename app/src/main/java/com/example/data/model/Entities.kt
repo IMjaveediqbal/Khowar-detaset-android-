@@ -55,8 +55,7 @@ object RbacPolicy {
     fun can(role: UserRole, permission: Permission): Boolean = permission in permissionsFor(role)
 
     fun canAssignRole(actor: UserRole, target: UserRole): Boolean = when (actor) {
-        UserRole.SUPER_ADMIN -> true
-        UserRole.ADMIN -> target !in setOf(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+        UserRole.SUPER_ADMIN, UserRole.ADMIN -> target != UserRole.SUPER_ADMIN
         else -> false
     }
 

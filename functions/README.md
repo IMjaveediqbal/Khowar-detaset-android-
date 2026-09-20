@@ -2,15 +2,9 @@
 
 The `reviewSubmission` callable function is the trusted path for changing a cloud submission from `SUBMITTED` to `APPROVED` or `REJECTED`.
 
-## Validator access
+## Account and role access
 
-Validator accounts must have the Firebase Auth custom claim:
-
-```json
-{ "validator": true }
-```
-
-Do not put this claim under user-controlled Firestore profile data.
+Public registration creates only `CONTRIBUTOR` profiles. Privileged access uses the protected `role` custom claim and matching `users/{uid}.role` value; user-controlled clients cannot write either field. Existing administrators enter through `khowardataset://admin/login`. The administrator provisioning callable always creates `ADMIN`, and `SUPER_ADMIN` remains bootstrap-only outside the app.
 
 ## Deploy
 

@@ -76,18 +76,18 @@ fun AppHeader(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun AppNavigationBar(currentScreen: AppScreen, onNavigate: (AppScreen) -> Unit, lang: AppLanguage, reviewQueueCount: Int) {
+fun AppNavigationBar(currentScreen: AppScreen, onNavigate: (AppScreen) -> Unit, lang: AppLanguage, reviewQueueCount: Int, role: com.example.data.model.UserRole?) {
     NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 6.dp) {
-        val items = listOf(
-            Triple(AppScreen.HOME, Strings.get("nav_home", lang), Icons.Default.Home),
-            Triple(AppScreen.EXPLORE, Strings.get("nav_explore", lang), Icons.Default.Search),
-            Triple(AppScreen.CONTRIBUTE, Strings.get("nav_contribute", lang), Icons.Default.AddCircleOutline),
-            Triple(AppScreen.VALIDATE, Strings.get("nav_validate", lang), Icons.Default.VerifiedUser),
-            Triple(AppScreen.STATS, Strings.get("nav_stats", lang), Icons.Default.BarChart),
-            Triple(AppScreen.RESEARCH, Strings.get("nav_research", lang), Icons.Default.Code),
-            Triple(AppScreen.ADMIN, Strings.get("nav_admin", lang), Icons.Default.AdminPanelSettings),
-            Triple(AppScreen.PROFILE, "Profile", Icons.Default.Person)
-        )
+        val items = buildList {
+            add(Triple(AppScreen.HOME, Strings.get("nav_home", lang), Icons.Default.Home))
+            add(Triple(AppScreen.EXPLORE, Strings.get("nav_explore", lang), Icons.Default.Search))
+            add(Triple(AppScreen.CONTRIBUTE, Strings.get("nav_contribute", lang), Icons.Default.AddCircleOutline))
+            if (com.example.security.RbacPolicy.can(role, com.example.security.RbacPermission.VALIDATE_COMMUNITY)) add(Triple(AppScreen.VALIDATE, Strings.get("nav_validate", lang), Icons.Default.VerifiedUser))
+            add(Triple(AppScreen.STATS, Strings.get("nav_stats", lang), Icons.Default.BarChart))
+            if (com.example.security.RbacPolicy.can(role, com.example.security.RbacPermission.ACCESS_RESEARCH_HUB)) add(Triple(AppScreen.RESEARCH, Strings.get("nav_research", lang), Icons.Default.Code))
+            if (com.example.security.RbacPolicy.can(role, com.example.security.RbacPermission.MANAGE_USERS)) add(Triple(AppScreen.ADMIN, Strings.get("nav_admin", lang), Icons.Default.AdminPanelSettings))
+            add(Triple(AppScreen.PROFILE, "Profile", Icons.Default.Person))
+        }
         items.forEach { (screen, label, icon) ->
             val selected = currentScreen == screen
             NavigationBarItem(selected = selected, onClick = { onNavigate(screen) }, icon = {

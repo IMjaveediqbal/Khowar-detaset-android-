@@ -55,8 +55,14 @@ export const saveProfile = onCall(options, async request => {
     const ref = db.collection("users").doc(uid);
     const existing = await tx.get(ref);
     const claimedRole = account.customClaims?.role;
-    const role: Role = existing.data()?.role ?? (roles.includes(claimedRole) ? claimedRole : "CONTRIBUTOR");
-    tx.set(ref, existing.exists ? profile : { ...profile, role }, { merge: true });
+    const existingRole = existing.data()?.role;
+    const managedClaim = account.customClaims?.managedAccount === true;
+    const role: Role = typeof existingRole === "string" && roles.includes(existingRole as Role)
+      ? existingRole as Role
+      : (managedClaim && typeof claimedRole === "string" && roles.includes(claimedRole as Role)
+        ? claimedRole as Role
+        : "CONTRIBUTOR");
+    tx.set(ref, { ...profile, role }, { merge: true });
     return { ...profile, role };
   });
 });

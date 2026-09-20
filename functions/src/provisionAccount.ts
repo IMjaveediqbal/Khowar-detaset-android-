@@ -2,7 +2,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { roles, Role, canChangeRole } from "./policy";
+import { Role, canChangeRole } from "./policy";
 
 if (!getApps().length) initializeApp();
 const auth = getAuth();
@@ -22,11 +22,10 @@ export const provisionManagedAccount = onCall(options, async request => {
   const password = String(request.data?.temporaryPassword ?? "");
   const displayName = String(request.data?.displayName ?? "").trim();
   const region = String(request.data?.region ?? "").trim();
-  const requestedRole = String(request.data?.role ?? "") as Role;
+  const requestedRole: Role = "ADMIN";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError("invalid-argument", "A valid email address is required.");
   if (password.length < 12 || password.length > 128) throw new HttpsError("invalid-argument", "Temporary password must be 12–128 characters.");
   if (displayName.length < 2 || displayName.length > 100 || region.length > 100) throw new HttpsError("invalid-argument", "Valid display name and region are required.");
-  if (!roles.includes(requestedRole) || requestedRole === "VISITOR" || requestedRole === "CONTRIBUTOR") throw new HttpsError("invalid-argument", "Choose a managed project role.");
   if (!canChangeRole(actorRole, "CONTRIBUTOR", requestedRole)) throw new HttpsError("permission-denied", "You cannot provision this role.");
 
   let createdUid = "";
@@ -57,7 +56,9 @@ export const completeManagedPasswordChange = onCall(options, async request => {
   if (profile.data()?.managedAccount !== true || profile.data()?.mustChangePassword !== true) return { ok: true, required: false };
 
   const provisionedAt = Number(profile.data()?.provisionedAt ?? 0);
-  const passwordUpdatedAt = Number(account.passwordUpdatedAt ?? 0);
+  // Identity Toolkit returns this field even though the Admin SDK UserRecord
+  // type does not currently expose it.
+  const passwordUpdatedAt = Number((account as unknown as { passwordUpdatedAt?: number | string }).passwordUpdatedAt ?? 0);
   if (!provisionedAt || !passwordUpdatedAt || passwordUpdatedAt <= provisionedAt) {
     throw new HttpsError("failed-precondition", "Change the temporary password before completing account setup.");
   }

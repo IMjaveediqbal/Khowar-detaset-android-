@@ -5,7 +5,12 @@ export const researchers: Role[] = ["EXPERT", "RESEARCHER", "DATA_STEWARD", "ADM
 export const stages = ["RAW", "QUALITY_CHECKED", "COMMUNITY_VERIFIED", "EXPERT_VERIFIED", "RESEARCH_READY", "RELEASED"] as const;
 export const rank: Record<Role, number> = { VISITOR: 0, CONTRIBUTOR: 10, VALIDATOR: 20, EXPERT: 30, RESEARCHER: 30, MODERATOR: 30, DATA_STEWARD: 40, AUDITOR: 40, ADMIN: 80, SUPER_ADMIN: 100 };
 export function canChangeRole(actor: Role, previous: Role, next: Role): boolean {
-  return next !== "VISITOR" && (actor === "SUPER_ADMIN" || (actor === "ADMIN" && rank[previous] < rank.ADMIN && rank[next] < rank.ADMIN));
+  // SUPER_ADMIN is bootstrap-only and can never be granted through an app callable.
+  // Administrators may appoint another administrator, but may not modify an
+  // existing super administrator or their own account (the caller checks self).
+  if (previous === "SUPER_ADMIN" || next === "VISITOR" || next === "SUPER_ADMIN") return false;
+  if (actor === "SUPER_ADMIN") return true;
+  return actor === "ADMIN" && previous !== "ADMIN";
 }
 export function canAdvance(role: Role, current: string, next: string): boolean {
   const index = stages.indexOf(current as typeof stages[number]);

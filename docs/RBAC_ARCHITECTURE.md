@@ -60,7 +60,7 @@ Only trusted backend functions can perform state transitions. Each transition va
 
 - New accounts start as `CONTRIBUTOR` after authenticated onboarding unless explicitly configured otherwise.
 - `VALIDATOR` and `EXPERT` are assigned only by Admin/Super Admin through trusted backend functions.
-- `ADMIN` is assigned only by Super Admin.
+- `ADMIN` may be assigned by an authenticated Admin or Super Admin through the trusted backend.
 - `SUPER_ADMIN` is bootstrap-only and should be tightly limited.
 - Role changes are deny-by-default, auditable and should require a reason.
 

@@ -45,7 +45,7 @@ class KhowarRepository(private val database: AppDatabase) {
     private val _currentUser = MutableStateFlow<User?>(null)
     val currentUser: StateFlow<User?> = _currentUser.asStateFlow()
 
-    suspend fun registerOrLoginUser(email: String, displayName: String, username: String, role: UserRole, region: String): User = withContext(Dispatchers.IO) {
+    suspend fun registerOrLoginUser(displayName: String, username: String, region: String): User = withContext(Dispatchers.IO) {
         val account = FirebaseAuth.getInstance().currentUser ?: error("Sign in first.")
         require(!account.isAnonymous) { "Use a verified sign-in method before contributing." }
         val result = FirebaseFunctions.getInstance().getHttpsCallable("saveProfile").call(mapOf("displayName" to displayName, "username" to username, "region" to region)).await().data as Map<*, *>

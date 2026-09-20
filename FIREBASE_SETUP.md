@@ -15,6 +15,7 @@ The Android app now saves contributions locally in Room and mirrors submitted re
    `firebase deploy --only firestore:rules,storage`
 
 8. Test with the Firebase Emulator Suite or the Rules Playground before opening the service to public contributors.
+9. Bootstrap the first `SUPER_ADMIN` only from a trusted Admin SDK environment. The mobile app never grants this role. Public signup is fixed to `CONTRIBUTOR`; administrator access starts at `khowardataset://admin/login`, and in-app administrator provisioning always creates `ADMIN`.
 
 ## Data flow
 
