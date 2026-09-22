@@ -2,26 +2,26 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Khowar Dataset Research & Community Palette
-val Navy900 = Color(0xFF0A192F)
-val Navy800 = Color(0xFF0F2744)
-val Navy700 = Color(0xFF1B3B6F)
-val Navy600 = Color(0xFF244A85)
+// KDA visual identity — restrained research/community palette.
+val Navy950 = Color(0xFF071A2B)
+val Navy900 = Color(0xFF0A2239)
+val Navy800 = Color(0xFF12324A)
+val Navy700 = Color(0xFF174A62)
 
-val TealAccent = Color(0xFF00B4D8)
-val EmeraldGreen = Color(0xFF06D6A0)
-val AmberAccent = Color(0xFFF4A261)
-val CoralAccent = Color(0xFFE76F51)
+val TealAccent = Color(0xFF159A9C)
+val EmeraldGreen = Color(0xFF2E9B6F)
+val AmberAccent = Color(0xFFD59B36)
+val CoralAccent = Color(0xFFC75B5B)
 
-// Neutral Surfaces
-val LightBackground = Color(0xFFF8FAFC)
+// Neutral surfaces
+val LightBackground = Color(0xFFF6F8FA)
 val LightSurface = Color(0xFFFFFFFF)
-val LightSurfaceVariant = Color(0xFFF1F5F9)
-val LightOnSurface = Color(0xFF0F172A)
-val LightBorder = Color(0xFFE2E8F0)
+val LightSurfaceVariant = Color(0xFFEEF3F5)
+val LightOnSurface = Color(0xFF13212B)
+val LightBorder = Color(0xFFD9E2E7)
 
-val DarkBackground = Color(0xFF0A192F)
-val DarkSurface = Color(0xFF112240)
-val DarkSurfaceVariant = Color(0xFF1D3557)
-val DarkOnSurface = Color(0xFFF1F5F9)
-val DarkBorder = Color(0xFF233554)
+val DarkBackground = Color(0xFF071A2B)
+val DarkSurface = Color(0xFF0D273D)
+val DarkSurfaceVariant = Color(0xFF15364D)
+val DarkOnSurface = Color(0xFFF2F7F8)
+val DarkBorder = Color(0xFF29485B)
