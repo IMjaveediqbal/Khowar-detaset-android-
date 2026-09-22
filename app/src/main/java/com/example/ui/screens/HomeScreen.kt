@@ -112,113 +112,101 @@ fun HeroSection(
     onExplore: () -> Unit,
     onContribute: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(Navy900, Navy800, Navy700.copy(alpha = 0.8f))
-                )
-            )
-            .padding(horizontal = 20.dp, vertical = 28.dp)
+    Surface(
+        color = Navy900,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.Start
         ) {
             Surface(
-                color = TealAccent.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(20.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, TealAccent.copy(alpha = 0.4f))
+                color = TealAccent.copy(alpha = 0.14f),
+                shape = RoundedCornerShape(8.dp),
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    TealAccent.copy(alpha = 0.35f)
+                )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = null,
-                        tint = TealAccent,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "OPEN LINGUISTIC PLATFORM",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TealAccent,
-                        letterSpacing = 1.sp
-                    )
-                }
+                Text(
+                    text = "KHOWAR LANGUAGE PRESERVATION",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.1.sp,
+                    color = TealAccent
+                )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             Text(
-                text = "Welcome to Khowar Dataset",
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Black,
-                color = Color.White,
-                textAlign = TextAlign.Center
+                text = "Khowar Dataset",
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             Text(
                 text = Strings.get("tagline", lang),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = EmeraldGreen,
-                textAlign = TextAlign.Center
+                fontSize = 15.sp,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Medium,
+                color = EmeraldGreen
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(Modifier.height(10.dp))
 
             Text(
                 text = Strings.get("mission_desc", lang),
-                fontSize = 12.sp,
-                color = Color(0xFFCBD5E1),
-                textAlign = TextAlign.Center,
-                lineHeight = 18.sp,
-                modifier = Modifier.padding(horizontal = 8.dp)
+                fontSize = 13.sp,
+                lineHeight = 20.sp,
+                color = Color(0xFFD3E0E6),
+                modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(Modifier.height(18.dp))
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Button(
-                    onClick = onExplore,
+                    onClick = onContribute,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = TealAccent,
-                        contentColor = Navy900
-                    ),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
+                        contentColor = Navy950
+                    )
                 ) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(Strings.get("btn_explore", lang), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        Strings.get("btn_contribute", lang),
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
 
                 OutlinedButton(
-                    onClick = onContribute,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Color.White
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen),
+                    onClick = onExplore,
+                    modifier = Modifier.weight(1f).height(46.dp),
                     shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        Color.White.copy(alpha = 0.5f)
+                    )
                 ) {
-                    Icon(Icons.Default.AddCircle, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(Strings.get("btn_contribute", lang), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EmeraldGreen)
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        Strings.get("btn_explore", lang),
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }
