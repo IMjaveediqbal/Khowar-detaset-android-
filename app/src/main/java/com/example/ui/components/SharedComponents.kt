@@ -32,43 +32,81 @@ fun AppHeader(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
     val lang by viewModel.currentLanguage.collectAsState()
     val isDark by viewModel.isDarkTheme.collectAsState()
     var showLangMenu by remember { mutableStateOf(false) }
-    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 4.dp, modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.navigateTo(AppScreen.HOME) }) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp)).background(Navy800).border(1.dp, TealAccent, RoundedCornerShape(10.dp))) {
-                        Icon(Icons.Default.Terrain, contentDescription = "Khowar Peaks", tint = TealAccent, modifier = Modifier.size(24.dp))
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("KHOWAR", fontWeight = FontWeight.Black, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface, letterSpacing = 1.sp)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("DATASET", fontWeight = FontWeight.Black, fontSize = 16.sp, color = TealAccent, letterSpacing = 1.sp)
-                        }
-                        Text(Strings.get("tagline", lang), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 1.dp,
+        shadowElevation = 2.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.clickable { viewModel.navigateTo(AppScreen.HOME) }
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Navy900,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, TealAccent.copy(alpha = 0.45f))
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            Icons.Default.Terrain,
+                            contentDescription = "KDA home",
+                            tint = TealAccent,
+                            modifier = Modifier.size(22.dp)
+                        )
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box {
-                        FilledTonalButton(onClick = { showLangMenu = true }, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp), shape = RoundedCornerShape(8.dp), modifier = Modifier.height(34.dp)) {
-                            Icon(Icons.Default.Language, contentDescription = "Language", modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(lang.nativeName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        DropdownMenu(expanded = showLangMenu, onDismissRequest = { showLangMenu = false }) {
-                            AppLanguage.values().forEach { language ->
-                                DropdownMenuItem(text = { Text("${language.nativeName} (${language.displayName})") }, onClick = {
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text(
+                        "KHOWAR DATASET",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        letterSpacing = 0.8.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        Strings.get("tagline", lang),
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box {
+                    IconButton(onClick = { showLangMenu = true }, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Outlined.Language, contentDescription = "Change language")
+                    }
+                    DropdownMenu(
+                        expanded = showLangMenu,
+                        onDismissRequest = { showLangMenu = false }
+                    ) {
+                        AppLanguage.values().forEach { language ->
+                            DropdownMenuItem(
+                                text = { Text("${language.nativeName} (${language.displayName})") },
+                                onClick = {
                                     viewModel.setLanguage(language)
                                     showLangMenu = false
-                                })
-                            }
+                                }
+                            )
                         }
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    IconButton(onClick = { viewModel.toggleDarkTheme() }, modifier = Modifier.size(34.dp)) {
-                        Icon(if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode, contentDescription = "Toggle Theme", tint = MaterialTheme.colorScheme.onSurface)
-                    }
+                }
+                IconButton(onClick = { viewModel.toggleDarkTheme() }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        if (isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                        contentDescription = "Toggle theme"
+                    )
                 }
             }
         }
@@ -76,25 +114,68 @@ fun AppHeader(viewModel: KhowarViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun AppNavigationBar(currentScreen: AppScreen, onNavigate: (AppScreen) -> Unit, lang: AppLanguage, reviewQueueCount: Int, role: com.example.data.model.UserRole?) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surface, tonalElevation = 6.dp) {
-        val items = buildList {
-            add(Triple(AppScreen.HOME, Strings.get("nav_home", lang), Icons.Default.Home))
-            add(Triple(AppScreen.EXPLORE, Strings.get("nav_explore", lang), Icons.Default.Search))
-            add(Triple(AppScreen.CONTRIBUTE, Strings.get("nav_contribute", lang), Icons.Default.AddCircleOutline))
-            if (com.example.security.RbacPolicy.can(role, com.example.security.RbacPermission.VALIDATE_COMMUNITY)) add(Triple(AppScreen.VALIDATE, Strings.get("nav_validate", lang), Icons.Default.VerifiedUser))
-            add(Triple(AppScreen.STATS, Strings.get("nav_stats", lang), Icons.Default.BarChart))
-            if (com.example.security.RbacPolicy.can(role, com.example.security.RbacPermission.ACCESS_RESEARCH_HUB)) add(Triple(AppScreen.RESEARCH, Strings.get("nav_research", lang), Icons.Default.Code))
-            if (com.example.security.RbacPolicy.can(role, com.example.security.RbacPermission.MANAGE_USERS)) add(Triple(AppScreen.ADMIN, Strings.get("nav_admin", lang), Icons.Default.AdminPanelSettings))
-            add(Triple(AppScreen.PROFILE, "Profile", Icons.Default.Person))
-        }
+fun AppNavigationBar(
+    currentScreen: AppScreen,
+    onNavigate: (AppScreen) -> Unit,
+    lang: AppLanguage,
+    reviewQueueCount: Int,
+    role: com.example.data.model.UserRole?
+) {
+    NavigationBar(
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 3.dp
+    ) {
+        val items = listOf(
+            Triple(AppScreen.HOME, Strings.get("nav_home", lang), Icons.Outlined.Home),
+            Triple(AppScreen.EXPLORE, Strings.get("nav_explore", lang), Icons.Outlined.Search),
+            Triple(AppScreen.CONTRIBUTE, Strings.get("nav_contribute", lang), Icons.Outlined.AddCircle),
+            Triple(AppScreen.STATS, Strings.get("nav_stats", lang), Icons.Outlined.BarChart),
+            Triple(AppScreen.PROFILE, "Profile", Icons.Outlined.Person)
+        )
+
         items.forEach { (screen, label, icon) ->
             val selected = currentScreen == screen
-            NavigationBarItem(selected = selected, onClick = { onNavigate(screen) }, icon = {
-                BadgedBox(badge = { if (screen == AppScreen.VALIDATE && reviewQueueCount > 0) Badge(containerColor = AmberAccent) { Text(reviewQueueCount.toString(), color = Navy900, fontWeight = FontWeight.Bold) } }) {
-                    Icon(icon, contentDescription = label, tint = if (selected) TealAccent else MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }, label = { Text(label, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal, maxLines = 1) }, colors = NavigationBarItemDefaults.colors(indicatorColor = Navy700.copy(alpha = 0.4f)))
+            NavigationBarItem(
+                selected = selected,
+                onClick = { onNavigate(screen) },
+                icon = {
+                    BadgedBox(
+                        badge = {
+                            if (screen == AppScreen.STATS && reviewQueueCount > 0 &&
+                                com.example.security.RbacPolicy.can(
+                                    role,
+                                    com.example.security.RbacPermission.VALIDATE_COMMUNITY
+                                )
+                            ) {
+                                Badge(containerColor = AmberAccent) {
+                                    Text(
+                                        reviewQueueCount.toString(),
+                                        color = Navy900,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp))
+                    }
+                },
+                label = {
+                    Text(
+                        label,
+                        fontSize = 11.sp,
+                        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = TealAccent,
+                    selectedTextColor = TealAccent,
+                    indicatorColor = TealAccent.copy(alpha = 0.12f),
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
         }
     }
 }

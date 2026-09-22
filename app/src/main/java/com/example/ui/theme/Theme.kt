@@ -9,35 +9,37 @@ import androidx.compose.ui.graphics.Color
 
 private val DarkColorScheme = darkColorScheme(
     primary = TealAccent,
-    onPrimary = Navy900,
+    onPrimary = Color.White,
     primaryContainer = Navy700,
     onPrimaryContainer = Color.White,
     secondary = EmeraldGreen,
-    onSecondary = Navy900,
+    onSecondary = Color.White,
     tertiary = AmberAccent,
+    onTertiary = Color(0xFF1C1608),
     background = DarkBackground,
     onBackground = DarkOnSurface,
     surface = DarkSurface,
     onSurface = DarkOnSurface,
     surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = Color(0xFFCBD5E1),
+    onSurfaceVariant = Color(0xFFB9CBD4),
     outline = DarkBorder
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = Navy800,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE2E8F0),
+    primaryContainer = Color(0xFFDCECEF),
     onPrimaryContainer = Navy900,
-    secondary = EmeraldGreen,
+    secondary = TealAccent,
     onSecondary = Color.White,
     tertiary = AmberAccent,
+    onTertiary = Color(0xFF1C1608),
     background = LightBackground,
     onBackground = LightOnSurface,
     surface = LightSurface,
     onSurface = LightOnSurface,
     surfaceVariant = LightSurfaceVariant,
-    onSurfaceVariant = Color(0xFF475569),
+    onSurfaceVariant = Color(0xFF4E626D),
     outline = LightBorder
 )
 
@@ -46,10 +48,10 @@ fun KhowarDatasetTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content
     )
 }
